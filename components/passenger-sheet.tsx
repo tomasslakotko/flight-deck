@@ -18,12 +18,12 @@ export function PassengerSheet({
   passenger: Passenger | null;
   onClose: () => void;
 }) {
-  const conflict = passenger ? passengerConflicts(passenger) : null;
+  if (!passenger) return null;
+  const conflict = passengerConflicts(passenger);
   return (
-    <Sheet open={Boolean(passenger)} onOpenChange={(o) => !o && onClose()}>
+    <Sheet open onOpenChange={(o) => !o && onClose()}>
       <SheetContent side="bottom" className="max-h-[90dvh] overflow-y-auto rounded-t-3xl p-0 sm:max-w-none">
-        {passenger ? (
-          <div className="px-5 pb-8 pt-4">
+        <div className="px-5 pb-8 pt-4">
             <SheetHeader className="mb-4 text-left">
               <SheetTitle>Passenger details</SheetTitle>
               <p className="text-xs text-muted-foreground">Stored on this device only</p>
@@ -84,7 +84,6 @@ export function PassengerSheet({
               Close
             </Button>
           </div>
-        ) : null}
       </SheetContent>
     </Sheet>
   );

@@ -30,8 +30,10 @@ export function PastePassengers({
     [text, flightDutyId],
   );
 
+  if (!open) return null;
+
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet open onOpenChange={onOpenChange}>
       <SheetContent side="bottom" className="max-h-[92dvh] overflow-y-auto rounded-t-3xl sm:max-w-none">
         <SheetHeader className="text-left">
           <SheetTitle>Paste passenger list</SheetTitle>

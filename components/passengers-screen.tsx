@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ArrowLeft, ClipboardPaste, List, Map } from "lucide-react";
@@ -21,11 +21,8 @@ export function PassengersScreen() {
   const [view, setView] = useState<"list" | "map">("list");
   const [selected, setSelected] = useState<Passenger | null>(null);
   const [pasteOpen, setPasteOpen] = useState(false);
-
   const checked = rows.filter((p) => p.checkedIn).length;
   const booked = rows.length;
-
-  const selectedOrEmpty = useMemo(() => selected, [selected]);
 
   if (!duty) {
     return (
@@ -135,7 +132,7 @@ export function PassengersScreen() {
         )}
       </div>
 
-      <PassengerSheet passenger={selectedOrEmpty} onClose={() => setSelected(null)} />
+      <PassengerSheet passenger={selected} onClose={() => setSelected(null)} />
       <PastePassengers
         open={pasteOpen}
         onOpenChange={setPasteOpen}

@@ -6,11 +6,19 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { db } from "@/lib/db";
+import { tryStorage } from "@/lib/idb";
 import { buildDemoDuties, buildDemoPassengers, buildDemoProfile } from "@/lib/demo-data";
 import type { CrewProfile, Duty, Passenger } from "@/lib/types";
+
+type Snapshot = {
+  duties: Duty[];
+  passengers: Passenger[];
+  profile: CrewProfile;
+};
 
 type RosterContextValue = {
   ready: boolean;
@@ -30,7 +38,7 @@ type RosterContextValue = {
 
 const RosterContext = createContext<RosterContextValue | null>(null);
 
-function memoryDemo() {
+function memoryDemo(): Snapshot {
   const duties = buildDemoDuties();
   return {
     duties,
@@ -39,14 +47,18 @@ function memoryDemo() {
   };
 }
 
-async function readStore() {
+function sortDuties(duties: Duty[]) {
+  return duties.sort((a, b) => (a.std ?? a.date).localeCompare(b.std ?? b.date));
+}
+
+async function readStore(): Promise<Snapshot> {
   const [duties, passengers, profile] = await Promise.all([
     db.duties.toArray(),
     db.passengers.toArray(),
     db.profile.get("me"),
   ]);
   return {
-    duties: duties.sort((a, b) => (a.std ?? a.date).localeCompare(b.std ?? b.date)),
+    duties: sortDuties(duties),
     passengers,
     profile: profile ?? buildDemoProfile(),
   };
@@ -54,46 +66,40 @@ async function readStore() {
 
 export function RosterProvider({ children }: { children: React.ReactNode }) {
   const demo = useMemo(() => memoryDemo(), []);
-  const [ready, setReady] = useState(true);
+  const dirty = useRef(false);
+  const [ready] = useState(true);
   const [duties, setDuties] = useState<Duty[]>(demo.duties);
   const [passengers, setPassengers] = useState<Passenger[]>(demo.passengers);
   const [profile, setProfile] = useState<CrewProfile>(demo.profile);
 
-  const apply = useCallback(
-    (next: { duties: Duty[]; passengers: Passenger[]; profile: CrewProfile }) => {
-      setDuties(next.duties);
-      setPassengers(next.passengers);
-      setProfile(next.profile);
-    },
-    [],
-  );
+  const apply = useCallback((next: Snapshot) => {
+    setDuties(next.duties);
+    setPassengers(next.passengers);
+    setProfile(next.profile);
+  }, []);
 
-  const reload = useCallback(async () => {
-    try {
-      apply(await readStore());
-    } catch {
-      apply(memoryDemo());
-    }
-  }, [apply]);
+  const markDirty = useCallback(() => {
+    dirty.current = true;
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      try {
-        const seeded = await db.flags.get("seeded");
-        if (!seeded?.value) {
-          const fresh = memoryDemo();
+      const seeded = await tryStorage(() => db.flags.get("seeded"));
+      if (cancelled) return;
+      if (!seeded?.value) {
+        const fresh = memoryDemo();
+        await tryStorage(async () => {
           await db.duties.bulkPut(fresh.duties);
           await db.passengers.bulkPut(fresh.passengers);
           await db.profile.put(fresh.profile);
           await db.flags.put({ key: "seeded", value: true });
-        }
-        if (cancelled) return;
-        apply(await readStore());
-      } catch {
-        if (!cancelled) apply(memoryDemo());
-      } finally {
-        if (!cancelled) setReady(true);
+        });
+        return;
+      }
+      const stored = await tryStorage(() => readStore());
+      if (!cancelled && stored && !dirty.current && stored.duties.length) {
+        apply(stored);
       }
     })();
     return () => {
@@ -101,132 +107,129 @@ export function RosterProvider({ children }: { children: React.ReactNode }) {
     };
   }, [apply]);
 
+  const persistDuties = useCallback((rows: Duty[]) => {
+    void tryStorage(() => db.duties.bulkPut(rows));
+  }, []);
+
   const importDuties = useCallback(
     async (incoming: Duty[], mode: "merge" | "replace") => {
-      try {
-        if (mode === "replace") await db.duties.clear();
-        const existing = await db.duties.toArray();
-        const byUid = new Map(existing.map((d) => [d.uid, d]));
+      markDirty();
+      setDuties((prev) => {
+        const byUid = new Map(prev.map((d) => [d.uid, d]));
+        const next = mode === "replace" ? [] : [...prev];
+        const seen = new Set(next.map((d) => d.id));
         for (const duty of incoming) {
-          const prev = byUid.get(duty.uid);
-          await db.duties.put(prev ? { ...duty, id: prev.id } : duty);
-        }
-        await reload();
-      } catch {
-        setDuties((prev) => {
-          const byUid = new Map(prev.map((d) => [d.uid, d]));
-          const next = mode === "replace" ? [] : [...prev];
-          for (const duty of incoming) {
-            const existing = byUid.get(duty.uid);
-            if (existing) {
-              const idx = next.findIndex((d) => d.id === existing.id);
-              if (idx >= 0) next[idx] = { ...duty, id: existing.id };
-            } else next.push(duty);
+          const existing = byUid.get(duty.uid);
+          if (existing) {
+            const idx = next.findIndex((d) => d.id === existing.id);
+            if (idx >= 0) next[idx] = { ...duty, id: existing.id };
+          } else if (!seen.has(duty.id)) {
+            next.push(duty);
+            seen.add(duty.id);
           }
-          return next;
-        });
-      }
+        }
+        persistDuties(next);
+        return sortDuties(next);
+      });
     },
-    [reload],
+    [markDirty, persistDuties],
   );
 
   const upsertDuty = useCallback(
     async (duty: Duty) => {
-      try {
-        await db.duties.put(duty);
-        await reload();
-      } catch {
-        setDuties((prev) => {
-          const idx = prev.findIndex((d) => d.id === duty.id);
-          if (idx < 0) return [...prev, duty];
-          const next = [...prev];
-          next[idx] = duty;
-          return next;
-        });
-      }
+      markDirty();
+      setDuties((prev) => {
+        const idx = prev.findIndex((d) => d.id === duty.id);
+        const next = idx < 0 ? [...prev, duty] : prev.map((d, i) => (i === idx ? duty : d));
+        void tryStorage(() => db.duties.put(duty));
+        return sortDuties(next);
+      });
     },
-    [reload],
+    [markDirty],
   );
 
   const deleteDuty = useCallback(
     async (id: string) => {
-      try {
+      markDirty();
+      setDuties((prev) => prev.filter((d) => d.id !== id));
+      setPassengers((prev) => prev.filter((p) => p.flightDutyId !== id));
+      void tryStorage(async () => {
         await db.duties.delete(id);
         await db.passengers.where("flightDutyId").equals(id).delete();
-        await reload();
-      } catch {
-        setDuties((prev) => prev.filter((d) => d.id !== id));
-        setPassengers((prev) => prev.filter((p) => p.flightDutyId !== id));
-      }
+      });
     },
-    [reload],
+    [markDirty],
   );
 
   const replacePassengers = useCallback(
     async (flightDutyId: string, rows: Passenger[]) => {
-      try {
+      markDirty();
+      setPassengers((prev) => [
+        ...prev.filter((p) => p.flightDutyId !== flightDutyId),
+        ...rows,
+      ]);
+      void tryStorage(async () => {
         await db.passengers.where("flightDutyId").equals(flightDutyId).delete();
         if (rows.length) await db.passengers.bulkPut(rows);
-        await reload();
-      } catch {
-        setPassengers((prev) => [
-          ...prev.filter((p) => p.flightDutyId !== flightDutyId),
-          ...rows,
-        ]);
-      }
+      });
     },
-    [reload],
+    [markDirty],
   );
 
   const savePassenger = useCallback(
     async (row: Passenger) => {
-      try {
-        await db.passengers.put(row);
-        await reload();
-      } catch {
-        setPassengers((prev) => {
-          const idx = prev.findIndex((p) => p.id === row.id);
-          if (idx < 0) return [...prev, row];
-          const next = [...prev];
-          next[idx] = row;
-          return next;
-        });
-      }
+      markDirty();
+      setPassengers((prev) => {
+        const idx = prev.findIndex((p) => p.id === row.id);
+        if (idx < 0) return [...prev, row];
+        const next = [...prev];
+        next[idx] = row;
+        return next;
+      });
+      void tryStorage(() => db.passengers.put(row));
     },
-    [reload],
+    [markDirty],
   );
 
-  const updateProfile = useCallback(async (patch: Partial<CrewProfile>) => {
-    setProfile((prev) => {
-      const next = { ...prev, ...patch, id: "me" as const };
-      void db.profile.put(next).catch(() => undefined);
-      return next;
-    });
-  }, []);
+  const updateProfile = useCallback(
+    async (patch: Partial<CrewProfile>) => {
+      markDirty();
+      setProfile((prev) => {
+        const next = { ...prev, ...patch, id: "me" as const };
+        void tryStorage(() => db.profile.put(next));
+        return next;
+      });
+    },
+    [markDirty],
+  );
 
   const checkInToday = useCallback(
     async (date: string) => {
-      const dates = profile.checkedInDates.includes(date)
-        ? profile.checkedInDates
-        : [...profile.checkedInDates, date];
-      await updateProfile({ checkedInDates: dates });
+      markDirty();
+      setProfile((prev) => {
+        const dates = prev.checkedInDates.includes(date)
+          ? prev.checkedInDates
+          : [...prev.checkedInDates, date];
+        const next = { ...prev, checkedInDates: dates };
+        void tryStorage(() => db.profile.put(next));
+        return next;
+      });
     },
-    [profile.checkedInDates, updateProfile],
+    [markDirty],
   );
 
   const resetDemo = useCallback(async () => {
+    markDirty();
     const fresh = memoryDemo();
     apply(fresh);
-    try {
+    void tryStorage(async () => {
       await db.duties.clear();
       await db.passengers.clear();
       await db.duties.bulkPut(fresh.duties);
       await db.passengers.bulkPut(fresh.passengers);
       await db.profile.put(fresh.profile);
-    } catch {
-      /* keep memory demo */
-    }
-  }, [apply]);
+    });
+  }, [apply, markDirty]);
 
   const markSynced = useCallback(async () => {
     await updateProfile({ lastSyncedAt: Date.now() });
