@@ -14,7 +14,6 @@ export function buildDemoProfile(): CrewProfile {
     id: "me",
     name: "Andrea",
     position: "L1",
-    lastSyncedAt: Date.now() - 60_000,
     checkedInDates: [],
   };
 }

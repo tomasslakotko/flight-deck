@@ -15,7 +15,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { parseIcs, parseRosterText } from "@/lib/parse-roster";
 import { extractPdfText } from "@/lib/parse-pdf";
 import { todayKey } from "@/lib/dates";
 import type { Duty, DutyType } from "@/lib/types";
@@ -52,6 +51,7 @@ export function ImportScreen() {
         throw new Error(body.error || "Could not download calendar");
       }
       const text = await res.text();
+      const { parseIcs } = await import("@/lib/parse-roster");
       const parsed = parseIcs(text, "ical");
       await updateProfile({ icalUrl: url.trim() });
       await applyDuties(parsed.duties, parsed.unmatched);
@@ -67,10 +67,12 @@ export function ImportScreen() {
     try {
       if (file.name.toLowerCase().endsWith(".pdf") || file.type === "application/pdf") {
         const text = await extractPdfText(file);
+        const { parseRosterText } = await import("@/lib/parse-roster");
         const parsed = parseRosterText(text, "pdf");
         await applyDuties(parsed.duties, parsed.unmatched);
       } else {
         const text = await file.text();
+        const { parseIcs } = await import("@/lib/parse-roster");
         const parsed = parseIcs(text, "ical");
         await applyDuties(parsed.duties, parsed.unmatched);
       }

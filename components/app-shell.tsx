@@ -25,7 +25,7 @@ const NAV = [
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { profile, duties, ready, markSynced } = useRoster();
+  const { profile, duties, markSynced } = useRoster();
   const date = todayKey();
   const bounds = shiftBounds(duties, date);
   const todayDuties = dutiesOnDate(duties, date);
@@ -92,7 +92,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </header>
 
         <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 pb-40 md:pb-28">
-          {ready ? children : <LoadingState />}
+          {children}
         </main>
 
         <footer className="fixed inset-x-0 bottom-0 z-40 border-t bg-white/90 backdrop-blur-md">
@@ -212,16 +212,6 @@ function Avatar({ name }: { name: string }) {
     <div className="relative flex size-9 items-center justify-center rounded-full bg-sky-100 text-xs font-semibold text-sky-800">
       {name.slice(0, 1)}
       <span className="absolute right-0 bottom-0 size-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />
-    </div>
-  );
-}
-
-function LoadingState() {
-  return (
-    <div className="flex flex-1 flex-col gap-3 pt-6">
-      <div className="h-8 w-48 animate-pulse rounded-lg bg-white" />
-      <div className="h-40 animate-pulse rounded-2xl bg-white" />
-      <div className="h-40 animate-pulse rounded-2xl bg-white" />
     </div>
   );
 }
