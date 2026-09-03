@@ -43,6 +43,11 @@ export function SeatMap({
                 <button
                   key={seat}
                   type="button"
+                  aria-label={
+                    pax
+                      ? `${seat} ${pax.lastName}/${pax.firstName}`
+                      : `Seat ${seat}`
+                  }
                   onClick={() => onSelect(pax ?? { seat })}
                   className={cn(
                     "flex h-11 min-w-11 flex-col items-center justify-center rounded-lg text-[9px] leading-tight ring-1 ring-slate-200",
