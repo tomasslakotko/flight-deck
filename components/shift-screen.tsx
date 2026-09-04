@@ -3,40 +3,40 @@
 import { AppShell } from "@/components/app-shell";
 import { FlightCard } from "@/components/flight-card";
 import { useRoster } from "@/components/roster-provider";
-import { Button } from "@/components/ui/button";
 import { AIRPORT_NOTES } from "@/lib/airports";
 import { formatLongDate, minutesUntil, todayKey } from "@/lib/dates";
 import { useLiveFlight } from "@/hooks/use-live-flight";
 import {
   flightsOnDate,
   nextDuty,
-  phaseForFlight,
+  phaseForShift,
   phaseSchedule,
-  PHASE_LABEL,
+  resolvedFlightStatus,
   shiftBounds,
 } from "@/lib/shift";
 import { cn } from "@/lib/utils";
 import type { Duty } from "@/lib/types";
 
 export function ShiftScreen() {
-  const { duties, profile, checkInToday } = useRoster();
+  const { duties } = useRoster();
   const today = todayKey();
   const flights = flightsOnDate(duties, today);
   const bounds = shiftBounds(duties, today);
   const next = nextDuty(duties);
-  const focus = flights[0] ?? next;
-  const { data: live } = useLiveFlight(focus?.flightNumber);
-  const checkedIn = profile.checkedInDates.includes(today);
-  const mins = minutesUntil(bounds?.start ?? focus?.checkIn ?? focus?.std);
-  const phase = focus ? phaseForFlight(focus) : "pre";
-  const phases = focus ? phaseSchedule(focus) : [];
+  const mins = minutesUntil(bounds?.start ?? flights[0]?.checkIn ?? flights[0]?.std ?? next?.std);
+  const phase = flights.length ? phaseForShift(flights) : "pre";
+  const phases = flights.length ? phaseSchedule(flights) : [];
 
   const heading =
-    !focus
+    !flights.length && !next
       ? "No duty today"
-      : mins != null && mins > 0 && !checkedIn
-        ? "Your next shift starts in"
-        : "Prepare the flight for boarding";
+      : flights.length && (phase === "done" || phase === "transfer")
+        ? phase === "done"
+          ? "Duty complete"
+          : "Check out after the last landing"
+        : mins != null && mins > 0
+          ? "Your next shift starts in"
+          : "Prepare the flight for boarding";
 
   const notes = Array.from(
     new Set(flights.flatMap((f) => [f.depIata, f.arrIata]).filter(Boolean) as string[]),
@@ -56,7 +56,7 @@ export function ShiftScreen() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
             {heading}{" "}
-            {mins != null && mins > 0 && !checkedIn ? (
+            {mins != null && mins > 0 && phase !== "done" ? (
               <span className="rounded-lg bg-red-100 px-2 py-0.5 text-red-700">
                 {mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}min` : `${mins}min`}
               </span>
@@ -76,24 +76,10 @@ export function ShiftScreen() {
                 )}
               >
                 <div className="text-[11px] font-medium text-slate-500">{p.label}</div>
-                <div className="text-sm font-semibold">{p.time}</div>
+                <div className="text-sm font-semibold tabular-nums">{p.time}</div>
               </li>
             ))}
           </ol>
-        ) : null}
-
-        {!checkedIn && bounds ? (
-          <Button
-            className="h-14 rounded-full bg-emerald-500 text-base font-semibold text-white hover:bg-emerald-600"
-            onClick={() => void checkInToday(today)}
-          >
-            <span className="flex flex-col leading-tight">
-              Check in
-              <span className="text-[11px] font-normal opacity-90">
-                Tap to start your shift · {PHASE_LABEL[phase]}
-              </span>
-            </span>
-          </Button>
         ) : null}
 
         <section>
@@ -101,7 +87,7 @@ export function ShiftScreen() {
           {flights.length ? (
             <div className="grid gap-3 md:grid-cols-2">
               {flights.map((f) => (
-                <FlightLiveCard key={f.id} duty={f} />
+                <FlightLiveCard key={`${f.id}-${f.flightNumber ?? f.title}`} duty={f} />
               ))}
             </div>
           ) : (
@@ -129,12 +115,6 @@ export function ShiftScreen() {
             </div>
           </section>
         ) : null}
-
-        {live?.registration || live?.depGate ? (
-          <p className="text-[11px] text-muted-foreground">
-            Live {live.sources.join(" · ") || "lookup"} · {live.registration ?? "reg pending"}
-          </p>
-        ) : null}
       </div>
     </AppShell>
   );
@@ -142,5 +122,6 @@ export function ShiftScreen() {
 
 function FlightLiveCard({ duty }: { duty: Duty }) {
   const { data } = useLiveFlight(duty.flightNumber);
-  return <FlightCard duty={duty} live={data} />;
+  const status = resolvedFlightStatus(duty, data);
+  return <FlightCard duty={duty} live={data ? { ...data, status } : data} />;
 }

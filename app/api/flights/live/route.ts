@@ -25,6 +25,20 @@ function str(v: unknown) {
   return typeof v === "string" && v.trim() ? v.trim() : undefined;
 }
 
+function obj(v: unknown): Json | undefined {
+  return v && typeof v === "object" && !Array.isArray(v) ? (v as Json) : undefined;
+}
+
+function toUtcIso(v: unknown): string | undefined {
+  const s = str(v);
+  if (!s) return undefined;
+  const hasOffset = /Z$/i.test(s) || /[+-]\d{2}:?\d{2}$/.test(s);
+  const withT = s.includes("T") ? s : s.replace(" ", "T");
+  const d = new Date(hasOffset ? withT : `${withT}Z`);
+  if (Number.isNaN(d.getTime())) return undefined;
+  return d.toISOString();
+}
+
 function num(v: unknown) {
   return typeof v === "number" && Number.isFinite(v) ? v : undefined;
 }
@@ -47,10 +61,16 @@ async function fromAirLabs(flightIata: string): Promise<Partial<LiveFlight>> {
       hex: str(obj.hex),
       registration: str(obj.reg_number),
       aircraftType: str(obj.aircraft_icao) ?? str(obj.model),
-      etd: str(obj.dep_estimated_utc) ?? str(obj.dep_estimated) ?? str(obj.dep_time_utc),
-      eta: str(obj.arr_estimated_utc) ?? str(obj.arr_estimated) ?? str(obj.arr_time_utc),
-      std: str(obj.dep_time_utc) ?? str(obj.dep_time),
-      sta: str(obj.arr_time_utc) ?? str(obj.arr_time),
+      etd:
+        toUtcIso(obj.dep_actual_utc) ??
+        toUtcIso(obj.dep_estimated_utc) ??
+        toUtcIso(obj.dep_time_utc),
+      eta:
+        toUtcIso(obj.arr_actual_utc) ??
+        toUtcIso(obj.arr_estimated_utc) ??
+        toUtcIso(obj.arr_time_utc),
+      std: toUtcIso(obj.dep_time_utc),
+      sta: toUtcIso(obj.arr_time_utc),
       depGate: str(obj.dep_gate),
       arrGate: str(obj.arr_gate),
       terminal: str(obj.dep_terminal),
@@ -81,6 +101,63 @@ async function fromAirLabs(flightIata: string): Promise<Partial<LiveFlight>> {
   }
 
   return { ...data, sources };
+}
+
+async function fromAviationStack(flightIata: string): Promise<Partial<LiveFlight>> {
+  const key = process.env.AVIATIONSTACK_API_KEY;
+  if (!key) return {};
+  const qs = `access_key=${encodeURIComponent(key)}&flight_iata=${encodeURIComponent(flightIata)}&limit=10`;
+  let json = await getJson(`https://api.aviationstack.com/v1/flights?${qs}`);
+  const err = obj(json?.error);
+  const errCode = str(err?.code) ?? (typeof err?.code === "number" ? String(err.code) : undefined);
+  if (errCode === "https_access_restricted" || errCode === "105" || !json) {
+    json = await getJson(`http://api.aviationstack.com/v1/flights?${qs}`);
+  }
+  if (obj(json?.error) && !Array.isArray(json?.data)) {
+    return { message: str(obj(json?.error)?.info) ?? str(obj(json?.error)?.message) };
+  }
+  const rows = Array.isArray(json?.data) ? (json?.data as Json[]) : [];
+  if (!rows.length) return {};
+
+  const want = flightIata.toUpperCase();
+  const matched = rows.filter((row) => {
+    const flight = obj(row.flight);
+    return str(flight?.iata)?.toUpperCase() === want;
+  });
+  const pool = matched.length ? matched : rows;
+  const today = new Date().toISOString().slice(0, 10);
+  const rank = (status?: string) =>
+    status === "active" ? 0 : status === "landed" ? 1 : status === "scheduled" ? 2 : 3;
+  const row =
+    pool.find((r) => str(r.flight_date) === today) ??
+    [...pool].sort((a, b) => rank(str(a.flight_status)) - rank(str(b.flight_status)))[0];
+  if (!row) return {};
+
+  const dep = obj(row.departure);
+  const arr = obj(row.arrival);
+  const aircraft = obj(row.aircraft);
+  const live = obj(row.live);
+  const delay = num(dep?.delay) ?? num(arr?.delay) ?? null;
+
+  return {
+    status: str(row.flight_status),
+    registration: str(aircraft?.registration),
+    aircraftType: str(aircraft?.icao) ?? str(aircraft?.iata),
+    hex: str(aircraft?.icao24),
+    etd: toUtcIso(dep?.actual) ?? toUtcIso(dep?.estimated) ?? toUtcIso(dep?.scheduled),
+    eta: toUtcIso(arr?.actual) ?? toUtcIso(arr?.estimated) ?? toUtcIso(arr?.scheduled),
+    std: toUtcIso(dep?.scheduled),
+    sta: toUtcIso(arr?.scheduled),
+    depGate: str(dep?.gate),
+    arrGate: str(arr?.gate),
+    terminal: str(dep?.terminal),
+    delayMin: delay,
+    lat: num(live?.latitude) ?? null,
+    lng: num(live?.longitude) ?? null,
+    alt: num(live?.altitude) ?? null,
+    heading: num(live?.direction) ?? null,
+    sources: ["AviationStack"],
+  };
 }
 
 async function fromAdsb(callsign: string): Promise<Partial<LiveFlight>> {
@@ -153,16 +230,10 @@ function merge(base: LiveFlight, extra: Partial<LiveFlight>): LiveFlight {
   return next;
 }
 
-export async function GET(req: NextRequest) {
-  const raw = req.nextUrl.searchParams.get("flightIata") ?? "";
-  const flightIata = toFlightIata(raw);
-  if (!flightIata) {
-    return Response.json({ error: "Missing flightIata" }, { status: 400 });
-  }
-
+async function lookupLive(flightIata: string): Promise<LiveFlight> {
   const cached = cache.get(flightIata);
   if (cached && Date.now() - cached.at < TTL_MS) {
-    return Response.json(cached.data);
+    return cached.data;
   }
 
   const callsign = toCallsign(flightIata) ?? flightIata;
@@ -173,11 +244,13 @@ export async function GET(req: NextRequest) {
     updatedAt: Date.now(),
   };
 
-  const [airlabs, adsb] = await Promise.all([
+  const [airlabs, aviationstack, adsb] = await Promise.all([
     fromAirLabs(flightIata),
+    fromAviationStack(flightIata),
     fromAdsb(callsign),
   ]);
   live = merge(live, airlabs);
+  live = merge(live, aviationstack);
   live = merge(live, adsb);
 
   const icao24 = live.hex;
@@ -192,5 +265,28 @@ export async function GET(req: NextRequest) {
   }
 
   cache.set(flightIata, { at: Date.now(), data: live });
-  return Response.json(live);
+  return live;
+}
+
+function parseRequestedFlights(req: NextRequest) {
+  const batch = req.nextUrl.searchParams.get("flights");
+  const single = req.nextUrl.searchParams.get("flightIata") ?? "";
+  const raw = batch ? batch.split(/[,\s]+/) : single ? [single] : [];
+  return [...new Set(raw.map((item) => toFlightIata(item)).filter(Boolean) as string[])].slice(
+    0,
+    8,
+  );
+}
+
+export async function GET(req: NextRequest) {
+  const iatas = parseRequestedFlights(req);
+  if (!iatas.length) {
+    return Response.json({ error: "Missing flightIata" }, { status: 400 });
+  }
+
+  const flights = await Promise.all(iatas.map((code) => lookupLive(code)));
+  if (iatas.length === 1 && !req.nextUrl.searchParams.get("flights")) {
+    return Response.json(flights[0]);
+  }
+  return Response.json({ flights });
 }

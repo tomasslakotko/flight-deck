@@ -30,6 +30,8 @@ export function PassengerSheet({
             </SheetHeader>
             <Section title="Basic information">
               <Row label="Full name" value={`${passenger.lastName} / ${passenger.firstName}`} />
+              <Row label="Title" value={passenger.title ?? "—"} />
+              <Row label="Meal" value={passenger.meal ?? "—"} />
               <Row
                 label="Loyalty level"
                 value={
@@ -116,8 +118,16 @@ function labelFor(code: string) {
     VLML: "Vegetarian",
     GFML: "Gluten free",
     CHML: "Child meal",
+    SPML: "Special meal",
+    PMML: "Premium meal",
     UMNR: "Unaccompanied minor",
     VIP: "VIP",
+    CHD: "Child",
+    INF: "Infant",
+    INFT: "Infant",
+    HAND: "Hand baggage",
+    BASE: "Hold baggage",
+    UNPAID: "Unpaid",
   };
   return map[code] ?? code;
 }

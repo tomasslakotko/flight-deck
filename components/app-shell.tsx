@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import {
   CalendarDays,
   ClipboardList,
@@ -23,19 +24,45 @@ const NAV = [
   { href: "/import", label: "Import", icon: Upload },
 ];
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({
+  children,
+  wide = false,
+}: {
+  children: React.ReactNode;
+  wide?: boolean;
+}) {
   const pathname = usePathname();
-  const { profile, duties, markSynced } = useRoster();
+  const { profile, duties, refreshSession, sessionLoading } = useRoster();
   const date = todayKey();
   const bounds = shiftBounds(duties, date);
   const todayDuties = dutiesOnDate(duties, date);
+  const [mounted, setMounted] = useState(false);
+  const [syncedLabel, setSyncedLabel] = useState<string | null>(null);
 
-  const syncedLabel = profile.lastSyncedAt
-    ? new Date(profile.lastSyncedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-    : null;
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!profile.lastSyncedAt) {
+      setSyncedLabel(null);
+      return;
+    }
+    setSyncedLabel(
+      new Date(profile.lastSyncedAt).toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+    );
+  }, [profile.lastSyncedAt]);
+
+  function navActive(href: string) {
+    if (!mounted) return href === "/";
+    return href === "/" ? pathname === "/" : pathname.startsWith(href);
+  }
 
   return (
-    <div className="flex min-h-dvh bg-background">
+    <div className="flex h-dvh overflow-hidden bg-background">
       <aside className="hidden w-60 shrink-0 flex-col border-r bg-white md:flex">
         <div className="px-5 pt-6 pb-4">
           <div className="text-lg font-semibold tracking-tight">
@@ -45,10 +72,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
         <nav className="flex flex-1 flex-col gap-1 px-3">
           {NAV.map((item) => {
-            const active =
-              item.href === "/"
-                ? pathname === "/"
-                : pathname.startsWith(item.href);
+            const active = navActive(item.href);
             return (
               <Link
                 key={item.href}
@@ -70,11 +94,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           name={profile.name}
           position={profile.position}
           synced={syncedLabel}
-          onRefresh={() => void markSynced()}
+          onRefresh={() => void refreshSession(true)}
+          refreshing={sessionLoading}
         />
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <header className="flex items-center justify-between px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2 md:hidden">
           <div>
             <div className="text-sm font-semibold">
@@ -91,7 +116,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </Button>
         </header>
 
-        <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 pb-40 md:pb-28">
+        <main
+          className={cn(
+            "mx-auto flex min-h-0 w-full flex-1 flex-col overflow-y-auto px-4 pb-40 md:pb-28",
+            wide ? "max-w-none" : "max-w-6xl",
+          )}
+        >
           {children}
         </main>
 
@@ -101,7 +131,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <MiniProfile
                 name={profile.name}
                 synced={syncedLabel}
-                onRefresh={() => void markSynced()}
+                onRefresh={() => void refreshSession(true)}
+                refreshing={sessionLoading}
               />
             </div>
             <DutyTimeline
@@ -113,10 +144,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <nav className="flex items-center justify-center gap-2 px-4 pb-[max(0.6rem,env(safe-area-inset-bottom))] md:hidden">
             <div className="flex h-14 items-center gap-1 rounded-full bg-white px-2 shadow-lg ring-1 ring-black/5">
               {NAV.map((item) => {
-                const active =
-                  item.href === "/"
-                    ? pathname === "/"
-                    : pathname.startsWith(item.href);
+                const active = navActive(item.href);
                 return (
                   <Link
                     key={item.href}
@@ -150,11 +178,13 @@ function ProfileBlock({
   position,
   synced,
   onRefresh,
+  refreshing,
 }: {
   name: string;
   position: string;
   synced: string | null;
   onRefresh: () => void;
+  refreshing?: boolean;
 }) {
   return (
     <div className="flex items-center gap-3 border-t px-4 py-4">
@@ -169,9 +199,9 @@ function ProfileBlock({
         type="button"
         onClick={onRefresh}
         className="flex size-11 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
-        aria-label="Refresh sync time"
+        aria-label="Refresh roster and flights"
       >
-        <RefreshCw className="size-4" />
+        <RefreshCw className={cn("size-4", refreshing && "animate-spin")} />
       </button>
     </div>
   );
@@ -181,10 +211,12 @@ function MiniProfile({
   name,
   synced,
   onRefresh,
+  refreshing,
 }: {
   name: string;
   synced: string | null;
   onRefresh: () => void;
+  refreshing?: boolean;
 }) {
   return (
     <div className="flex items-center gap-2 pr-2">
@@ -199,9 +231,9 @@ function MiniProfile({
         type="button"
         onClick={onRefresh}
         className="flex size-9 items-center justify-center rounded-full text-slate-400"
-        aria-label="Refresh"
+        aria-label="Refresh roster and flights"
       >
-        <RefreshCw className="size-3.5" />
+        <RefreshCw className={cn("size-3.5", refreshing && "animate-spin")} />
       </button>
     </div>
   );

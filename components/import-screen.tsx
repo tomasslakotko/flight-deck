@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/app-shell";
 import { useRoster } from "@/components/roster-provider";
@@ -16,39 +16,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { extractPdfText } from "@/lib/parse-pdf";
+import { downloadIcs } from "@/lib/fetch-ics";
 import { todayKey } from "@/lib/dates";
 import type { Duty, DutyType } from "@/lib/types";
 
-function isLoopbackCalendar(url: string) {
-  try {
-    const parsed = new URL(url, "http://127.0.0.1");
-    return parsed.pathname.startsWith("/samples/");
-  } catch {
-    return url.startsWith("/samples/");
-  }
-}
-
-async function downloadIcs(url: string) {
-  if (url.startsWith("/samples/") || isLoopbackCalendar(url)) {
-    const path = url.startsWith("http") ? new URL(url).pathname : url;
-    const res = await fetch(path, { cache: "no-store" });
-    if (!res.ok) throw new Error("Could not read the sample calendar");
-    return res.text();
-  }
-  const res = await fetch(`/api/roster/ical?url=${encodeURIComponent(url)}`, {
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || "Could not download calendar");
-  }
-  return res.text();
-}
-
 export function ImportScreen() {
-  const { importDuties, upsertDuty, updateProfile, profile, resetDemo, markSynced } = useRoster();
+  const { importDuties, upsertDuty, updateProfile, profile, resetDemo, markSynced, refreshSession } = useRoster();
   const [url, setUrl] = useState(profile.icalUrl ?? "");
   const [replace, setReplace] = useState(false);
+
+  useEffect(() => {
+    if (profile.icalUrl) setUrl(profile.icalUrl);
+  }, [profile.icalUrl]);
   const [busy, setBusy] = useState(false);
   const [unmatched, setUnmatched] = useState<string[]>([]);
 
@@ -62,6 +41,7 @@ export function ImportScreen() {
     await markSynced();
     setUnmatched(leftover);
     toast.success(`Imported ${duties.length} duties`);
+    void refreshSession(true, true);
   }
 
   async function fetchIcal() {

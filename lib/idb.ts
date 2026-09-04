@@ -1,4 +1,4 @@
-const TIMEOUT_MS = 800;
+const TIMEOUT_MS = 5_000;
 
 export function withTimeout<T>(promise: Promise<T>, ms = TIMEOUT_MS): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -16,9 +16,9 @@ export function withTimeout<T>(promise: Promise<T>, ms = TIMEOUT_MS): Promise<T>
   });
 }
 
-export async function tryStorage<T>(run: () => Promise<T>): Promise<T | undefined> {
+export async function tryStorage<T>(run: () => Promise<T>, ms = TIMEOUT_MS): Promise<T | undefined> {
   try {
-    return await withTimeout(run());
+    return await withTimeout(run(), ms);
   } catch {
     return undefined;
   }

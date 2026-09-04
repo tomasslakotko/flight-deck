@@ -11,7 +11,7 @@ Installable roster PWA for airBaltic cabin crew. Built for iPhone and iPad in th
 ```bash
 npm install
 cp .env.example .env.local
-# paste your AirLabs key into AIRLABS_API_KEY (optional — the app works without it)
+# paste AIRLABS_API_KEY and/or AVIATIONSTACK_API_KEY (optional — the app works without them)
 npm run dev
 ```
 
@@ -34,9 +34,10 @@ We do **not** log into CrewLink with your airline password.
 `GET /api/flights/live?flightIata=BT139` merges, with a 3-minute cache:
 
 1. [AirLabs](https://airlabs.co) — status, registration, ETD/ETA, gate (`AIRLABS_API_KEY`)
-2. [adsb.lol](https://api.adsb.lol) — live position / callsign `BTI139`
-3. [hexdb.io](https://hexdb.io) — registration from ICAO24
-4. [OpenSky](https://opensky-network.org) — fallback position
+2. [AviationStack](https://aviationstack.com) — status, registration, actual times, gate (`AVIATIONSTACK_API_KEY`)
+3. [adsb.lol](https://api.adsb.lol) — live position / callsign `BTI139`
+4. [hexdb.io](https://hexdb.io) — registration from ICAO24
+5. [OpenSky](https://opensky-network.org) — fallback position
 
 If every source misses, roster STD/STA still show and the card says live data is unavailable.
 
@@ -58,7 +59,7 @@ Send a real airBaltic dump later to tighten the parser. Lists never leave the de
 ## Deploy on Vercel (Hobby / free)
 
 1. Push this repo and import it in Vercel
-2. Set `AIRLABS_API_KEY`
+2. Set `AIRLABS_API_KEY` and/or `AVIATIONSTACK_API_KEY`
 3. Deploy
 
 ## Stack

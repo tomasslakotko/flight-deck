@@ -7,19 +7,22 @@ import { AppShell } from "@/components/app-shell";
 import { StatusBadge } from "@/components/status-badge";
 import { useRoster } from "@/components/roster-provider";
 import { Button } from "@/components/ui/button";
-import { airportCity } from "@/lib/airports";
-import { durationLabel, formatClock, formatLongDate } from "@/lib/dates";
+import { airportCity, airportTz, flightRouteLabel } from "@/lib/airports";
+import { clocksDiffer, durationLabel, formatClock, formatLongDate } from "@/lib/dates";
 import { useLiveFlight } from "@/hooks/use-live-flight";
-import { phaseForFlight, phaseSchedule } from "@/lib/shift";
+import { parseDutyCrew, withYouHighlight } from "@/lib/parse-crew";
+import { phaseForFlight, phaseSchedule, resolvedFlightStatus } from "@/lib/shift";
 import { cn } from "@/lib/utils";
 
 export function FlightScreen() {
   const params = useParams<{ id: string }>();
-  const { duties } = useRoster();
+  const { duties, profile } = useRoster();
   const duty = duties.find((d) => d.id === params.id);
   const { data: live, loading } = useLiveFlight(duty?.flightNumber);
   const phase = duty ? phaseForFlight(duty) : "pre";
   const phases = duty ? phaseSchedule(duty) : [];
+  const depTz = airportTz(duty?.depIata);
+  const arrTz = airportTz(duty?.arrIata);
 
   if (!duty) {
     return (
@@ -41,7 +44,7 @@ export function FlightScreen() {
           <div>
             <div className="text-xs text-muted-foreground">{duty.flightNumber}</div>
             <h1 className="text-2xl font-semibold tracking-tight">
-              {duty.depIata} → {duty.arrIata}
+              {flightRouteLabel(duty)}
             </h1>
           </div>
         </div>
@@ -52,12 +55,16 @@ export function FlightScreen() {
           <InfoCard label="Flight" value={duty.flightNumber ?? "—"} hint={durationLabel(duty.std, duty.sta)} />
           <InfoCard
             label="STD / ETD"
-            value={formatClock(live?.etd || duty.std)}
-            hint={live?.etd ? `Roster ${formatClock(duty.std)}` : airportCity(duty.depIata)}
+            value={formatClock(live?.etd || duty.std, depTz)}
+            hint={
+              clocksDiffer(live?.etd, duty.std, depTz)
+                ? `Roster ${formatClock(duty.std, depTz)}`
+                : airportCity(duty.depIata)
+            }
           />
           <InfoCard
             label="STA / ETA"
-            value={formatClock(live?.eta || duty.sta)}
+            value={formatClock(live?.eta || duty.sta, arrTz)}
             hint={airportCity(duty.arrIata)}
           />
           <div className="rounded-2xl bg-white p-4 ring-1 ring-black/5">
@@ -66,16 +73,12 @@ export function FlightScreen() {
               {loading ? (
                 <span className="text-sm text-muted-foreground">Looking up…</span>
               ) : (
-                <StatusBadge status={live?.status} delayMin={live?.delayMin} />
+                <StatusBadge status={resolvedFlightStatus(duty, live)} delayMin={live?.delayMin} />
               )}
             </div>
-            <div className="mt-2 text-xs text-muted-foreground">
-              {live?.unavailable
-                ? live.message
-                : live?.sources.length
-                  ? live.sources.join(" · ")
-                  : "Using roster times"}
-            </div>
+            {live?.unavailable ? (
+              <div className="mt-2 text-xs text-muted-foreground">{live.message}</div>
+            ) : null}
           </div>
         </div>
 
@@ -106,14 +109,12 @@ export function FlightScreen() {
           </ol>
         ) : null}
 
-        {duty.notes ? (
-          <article className="rounded-2xl bg-white p-4 text-sm ring-1 ring-black/5">
-            <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
-              Cabin notes
-            </div>
-            {duty.notes}
-          </article>
-        ) : null}
+        <CrewAndNotes
+          notes={duty.notes}
+          title={duty.title}
+          position={duty.position ?? profile.position}
+          name={profile.name}
+        />
 
         <Button asChild className="h-12 rounded-full">
           <Link href={`/flight/${duty.id}/passengers`}>
@@ -133,5 +134,64 @@ function InfoCard({ label, value, hint }: { label: string; value: string; hint?:
       <div className="mt-1 text-xl font-semibold tracking-tight">{value}</div>
       {hint ? <div className="mt-1 text-xs text-muted-foreground">{hint}</div> : null}
     </div>
+  );
+}
+
+function CrewAndNotes({
+  notes,
+  title,
+  name,
+  position,
+}: {
+  notes?: string;
+  title?: string;
+  name?: string;
+  position?: string;
+}) {
+  const parsed = parseDutyCrew({ notes, title });
+  const crew = withYouHighlight(parsed.crew, { name, position });
+  const leftover = parsed.leftover;
+
+  if (!crew.length && !leftover) return null;
+
+  return (
+    <>
+      {crew.length ? (
+        <article className="rounded-2xl bg-white p-4 ring-1 ring-black/5">
+          <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+            Crew
+          </div>
+          <ul className="grid gap-2 sm:grid-cols-2">
+            {crew.map((member, index) => (
+              <li
+                key={`${member.role}-${member.code}-${index}`}
+                className={cn(
+                  "flex items-center justify-between gap-3 rounded-xl px-3 py-2 ring-1 ring-black/5",
+                  member.you ? "bg-emerald-50 ring-emerald-200/80" : "bg-slate-50/80",
+                )}
+              >
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold tracking-wide tabular-nums">{member.code}</div>
+                  <div className="text-xs text-muted-foreground">{member.label}</div>
+                </div>
+                {member.you ? (
+                  <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">
+                    You
+                  </span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </article>
+      ) : null}
+      {leftover ? (
+        <article className="rounded-2xl bg-white p-4 text-sm ring-1 ring-black/5">
+          <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
+            Notes
+          </div>
+          <p className="whitespace-pre-line text-pretty">{leftover}</p>
+        </article>
+      ) : null}
+    </>
   );
 }

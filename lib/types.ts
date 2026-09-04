@@ -57,7 +57,6 @@ export interface CrewProfile {
   position: string;
   icalUrl?: string;
   lastSyncedAt?: number;
-  checkedInDates: string[];
 }
 
 export interface LiveFlight {

@@ -1,7 +1,10 @@
-"use client";
-
+import { Suspense } from "react";
 import { PassengersScreen } from "@/components/passengers-screen";
 
 export default function PassengersPage() {
-  return <PassengersScreen />;
+  return (
+    <Suspense>
+      <PassengersScreen />
+    </Suspense>
+  );
 }

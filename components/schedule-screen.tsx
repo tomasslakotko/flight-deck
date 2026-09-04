@@ -8,6 +8,7 @@ import { WeekGrid } from "@/components/week-grid";
 import { useRoster } from "@/components/roster-provider";
 import { Button } from "@/components/ui/button";
 import { todayKey, weekDays } from "@/lib/dates";
+import { continuationsByDate, dutiesByScheduleDate } from "@/lib/shift";
 
 export function ScheduleScreen() {
   const { duties } = useRoster();
@@ -15,15 +16,8 @@ export function ScheduleScreen() {
   const today = todayKey();
   const anchor = addWeeks(new Date(), offset);
   const days = weekDays(anchor);
-  const byDate = useMemo(() => {
-    const map = new Map<string, typeof duties>();
-    for (const d of duties) {
-      const list = map.get(d.date) ?? [];
-      list.push(d);
-      map.set(d.date, list);
-    }
-    return map;
-  }, [duties]);
+  const byDate = useMemo(() => dutiesByScheduleDate(duties), [duties]);
+  const continuations = useMemo(() => continuationsByDate(duties), [duties]);
 
   return (
     <AppShell>
@@ -45,7 +39,7 @@ export function ScheduleScreen() {
             </Button>
           </div>
         </div>
-        <WeekGrid days={days} dutiesByDate={byDate} today={today} />
+        <WeekGrid days={days} dutiesByDate={byDate} continuationsByDate={continuations} today={today} />
       </div>
     </AppShell>
   );

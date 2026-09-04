@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { flightRouteLabel } from "@/lib/airports";
 import { formatClock } from "@/lib/dates";
+import { isFlightDuty } from "@/lib/shift";
 import type { Duty } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -14,7 +16,7 @@ export function DutyTimeline({
   shiftStart?: string | null;
   shiftEnd?: string | null;
 }) {
-  const flights = duties.filter((d) => d.type === "flight");
+  const flights = duties.filter((d) => isFlightDuty(d));
   if (!flights.length && !shiftStart) return null;
 
   return (
@@ -28,7 +30,7 @@ export function DutyTimeline({
             className="min-w-[7.5rem] flex-1 px-1"
           >
             <div className="mb-1 text-center text-[11px] font-medium text-slate-600">
-              {f.depIata} → {f.arrIata}
+              {flightRouteLabel(f)}
             </div>
             <div className="flex items-center gap-1 text-[10px] text-slate-400">
               <span>{formatClock(f.std)}</span>

@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { Bed } from "lucide-react";
 import { formatClock } from "@/lib/dates";
+import { airportTz, flightRouteLabel } from "@/lib/airports";
+import { isFlightDuty, type ShiftContinuation } from "@/lib/shift";
 import type { Duty } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { StatusBadge } from "@/components/status-badge";
@@ -11,10 +13,12 @@ import { StatusBadge } from "@/components/status-badge";
 export function WeekGrid({
   days,
   dutiesByDate,
+  continuationsByDate,
   today,
 }: {
   days: Date[];
   dutiesByDate: Map<string, Duty[]>;
+  continuationsByDate?: Map<string, ShiftContinuation[]>;
   today: string;
 }) {
   return (
@@ -22,13 +26,16 @@ export function WeekGrid({
       {days.map((day) => {
         const key = format(day, "yyyy-MM-dd");
         const items = dutiesByDate.get(key) ?? [];
-        const flights = items.filter((d) => d.type === "flight");
-        const off = items.some((d) => d.type === "off") && !flights.length;
+        const flights = items.filter((d) => isFlightDuty(d) && d.type !== "checkin");
+        const continuations = continuationsByDate?.get(key) ?? [];
+        const showContinuations = !flights.length && continuations.length > 0;
+        const off = items.some((d) => d.type === "off") && !flights.length && !showContinuations;
         const hotel = items.find((d) => d.type === "hotel");
         const sby = items.find((d) => d.type === "standby" || d.type === "reserve");
         const isToday = key === today;
         const first = flights[0]?.std;
         const last = flights[flights.length - 1]?.sta;
+        const continuation = continuations[0];
         return (
           <section
             key={key}
@@ -49,7 +56,11 @@ export function WeekGrid({
               <div className="text-lg font-semibold">{format(day, "d")}</div>
               {flights.length ? (
                 <div className="text-[11px] opacity-80">
-                  {formatClock(first)} – {formatClock(last)} · {flights.length} flights
+                  {formatClock(first, airportTz(flights[0]?.depIata))} – {formatClock(last, airportTz(flights[flights.length - 1]?.arrIata))} · {flights.length} {flights.length === 1 ? "flight" : "flights"}
+                </div>
+              ) : showContinuations && continuation ? (
+                <div className="text-[11px] opacity-80">
+                  from {format(parseISO(`${continuation.fromDate}T12:00:00`), "EEE")} · landing {formatClock(continuation.last.sta, airportTz(continuation.last.arrIata))}
                 </div>
               ) : null}
             </header>
@@ -67,15 +78,32 @@ export function WeekGrid({
                 >
                   <div className="flex items-center justify-between gap-1">
                     <span className="text-xs font-semibold">
-                      {f.depIata} → {f.arrIata}
+                      {flightRouteLabel(f)}
                     </span>
                     <StatusBadge />
                   </div>
                   <div className="mt-1 text-[11px] text-slate-500">
-                    {f.flightNumber} · {formatClock(f.std)}–{formatClock(f.sta)}
+                    {f.flightNumber} · {formatClock(f.std, airportTz(f.depIata))}–{formatClock(f.sta, airportTz(f.arrIata))}
                   </div>
                 </Link>
               ))}
+              {showContinuations
+                ? continuations.map((row) => (
+                    <Link
+                      key={`${row.fromDate}-${row.last.id}`}
+                      href={`/flight/${row.last.id}`}
+                      className="rounded-xl bg-slate-50 px-2.5 py-2 text-left ring-1 ring-slate-200/80"
+                    >
+                      <div className="text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                        Continues from {format(parseISO(`${row.fromDate}T12:00:00`), "EEEE")}
+                      </div>
+                      <div className="mt-1 text-xs font-semibold">{flightRouteLabel(row.last)}</div>
+                      <div className="mt-0.5 text-[11px] text-slate-500">
+                        {row.last.flightNumber} · landing {formatClock(row.last.sta, airportTz(row.last.arrIata))}
+                      </div>
+                    </Link>
+                  ))
+                : null}
               {sby ? (
                 <div className="rounded-xl bg-amber-50 px-2.5 py-2 text-xs font-medium text-amber-900">
                   Standby {formatClock(sby.std)}–{formatClock(sby.sta)}
