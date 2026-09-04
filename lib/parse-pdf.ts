@@ -79,7 +79,6 @@ export async function extractPdfText(file: File): Promise<string> {
   const doc = await pdfjs.getDocument({
     data,
     useSystemFonts: true,
-    isEvalSupported: false,
   }).promise;
 
   try {
