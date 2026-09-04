@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { flightRouteLabel } from "@/lib/airports";
+import { airportTz, flightRouteLabel } from "@/lib/airports";
 import { formatClock } from "@/lib/dates";
 import { isFlightDuty } from "@/lib/shift";
 import type { Duty } from "@/lib/types";
@@ -18,14 +18,16 @@ export function DutyTimeline({
 }) {
   const flights = duties.filter((d) => isFlightDuty(d));
   if (!flights.length && !shiftStart) return null;
+  const startTz = airportTz(flights[0]?.depIata);
+  const endTz = airportTz(flights[flights.length - 1]?.arrIata);
 
   return (
     <div className="flex min-w-0 flex-1 flex-col justify-center px-2">
       <div className="relative flex items-end gap-0 overflow-x-auto pb-1">
-        <Tick label="Shift start" time={formatClock(shiftStart)} tone="green" />
+        <Tick label="Shift start" time={formatClock(shiftStart, startTz)} tone="green" />
         {flights.map((f) => (
           <Link
-            key={f.id}
+            key={`${f.id}-${f.flightNumber ?? f.title}`}
             href={`/flight/${f.id}`}
             className="min-w-[7.5rem] flex-1 px-1"
           >
@@ -33,13 +35,13 @@ export function DutyTimeline({
               {flightRouteLabel(f)}
             </div>
             <div className="flex items-center gap-1 text-[10px] text-slate-400">
-              <span>{formatClock(f.std)}</span>
+              <span className="tabular-nums">{formatClock(f.std, airportTz(f.depIata))}</span>
               <span className="h-1.5 flex-1 rounded-full bg-sky-400/80" />
-              <span>{formatClock(f.sta)}</span>
+              <span className="tabular-nums">{formatClock(f.sta, airportTz(f.arrIata))}</span>
             </div>
           </Link>
         ))}
-        <Tick label="Shift end" time={formatClock(shiftEnd)} tone="slate" />
+        <Tick label="Shift end" time={formatClock(shiftEnd, endTz)} tone="slate" />
       </div>
     </div>
   );
@@ -63,7 +65,7 @@ function Tick({
           tone === "green" ? "bg-emerald-500" : "bg-slate-300",
         )}
       />
-      <div className="mt-0.5 text-[10px] text-slate-400">{time}</div>
+      <div className="mt-0.5 text-[10px] tabular-nums text-slate-400">{time}</div>
     </div>
   );
 }

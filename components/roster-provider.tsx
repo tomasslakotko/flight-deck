@@ -17,6 +17,7 @@ import { buildDemoDuties, buildDemoPassengers, buildDemoProfile } from "@/lib/de
 import { todayKey } from "@/lib/dates";
 import { toFlightIata } from "@/lib/airports";
 import { enrichDutyRoutes, flightsOnDate } from "@/lib/shift";
+import { dedupeFlightDuties } from "@/lib/parse-netline-pdf";
 import { parseSession, sessionIsFresh, type SessionStamp } from "@/lib/session";
 import type { CrewProfile, Duty, LiveFlight, Passenger } from "@/lib/types";
 
@@ -40,6 +41,8 @@ type RosterContextValue = {
   savePassenger: (row: Passenger) => Promise<void>;
   updateProfile: (patch: Partial<CrewProfile>) => Promise<void>;
   resetDemo: () => Promise<void>;
+  clearPastDuties: () => Promise<number>;
+  clearRoster: () => Promise<void>;
   markSynced: () => Promise<void>;
   refreshSession: (force?: boolean, silent?: boolean) => Promise<void>;
 };
@@ -60,16 +63,18 @@ function sortDuties(duties: Duty[]) {
 }
 
 function normalizeDuties(duties: Duty[]) {
-  return enrichDutyRoutes(sortDuties(duties));
+  return enrichDutyRoutes(dedupeFlightDuties(sortDuties(duties)));
 }
 
 function mergeDutyLists(prev: Duty[], incoming: Duty[], mode: "merge" | "replace") {
   const incomingIcal = incoming.some((d) => d.source === "ical");
+  const incomingPdf = incoming.some((d) => d.source === "pdf");
+  // PDF / iCal from CrewLink replace auto-sourced roster; keep only manual extras.
   const base =
     mode === "replace"
       ? []
-      : incomingIcal
-        ? prev.filter((d) => d.source === "manual" || d.source === "pdf")
+      : incomingPdf || incomingIcal
+        ? prev.filter((d) => d.source === "manual")
         : [...prev];
   const byUid = new Map(base.map((d) => [d.uid, d]));
   const next = [...base];
@@ -84,7 +89,7 @@ function mergeDutyLists(prev: Duty[], incoming: Duty[], mode: "merge" | "replace
       seen.add(duty.id);
     }
   }
-  return sortDuties(next);
+  return dedupeFlightDuties(sortDuties(next));
 }
 
 function todayFlightCodes(duties: Duty[]) {
@@ -171,7 +176,16 @@ export function RosterProvider({ children }: { children: React.ReactNode }) {
       } else {
         const stored = await tryStorage(() => readStore());
         if (!cancelled && stored && !dirty.current && stored.duties.length) {
-          apply(stored);
+          const cleaned = normalizeDuties(stored.duties);
+          apply({ ...stored, duties: cleaned });
+          if (cleaned.length !== stored.duties.length) {
+            await tryStorage(async () => {
+              await db.transaction("rw", db.duties, async () => {
+                await db.duties.clear();
+                if (cleaned.length) await db.duties.bulkPut(cleaned);
+              });
+            });
+          }
         }
       }
       const [liveRows, sessionFlag] = await Promise.all([
@@ -380,6 +394,41 @@ export function RosterProvider({ children }: { children: React.ReactNode }) {
     });
   }, [apply, markDirty]);
 
+  const clearPastDuties = useCallback(async () => {
+    markDirty();
+    const today = todayKey();
+    const prev = dutiesRef.current;
+    const keep = prev.filter((d) => d.date >= today);
+    const removedIds = new Set(prev.filter((d) => d.date < today).map((d) => d.id));
+    const removed = removedIds.size;
+    dutiesRef.current = keep;
+    setDuties(keep);
+    setPassengers((rows) => rows.filter((p) => !removedIds.has(p.flightDutyId)));
+    persistDuties(keep);
+    void tryStorage(async () => {
+      for (const id of removedIds) {
+        await db.passengers.where("flightDutyId").equals(id).delete();
+      }
+    });
+    return removed;
+  }, [markDirty, persistDuties]);
+
+  const clearRoster = useCallback(async () => {
+    markDirty();
+    dutiesRef.current = [];
+    setDuties([]);
+    setPassengers([]);
+    setLiveByIata({});
+    setSession(null);
+    sessionRef.current = null;
+    await tryStorage(async () => {
+      await db.duties.clear();
+      await db.passengers.clear();
+      await db.liveFlights.clear();
+      await db.flags.delete("session");
+    });
+  }, [markDirty]);
+
   const value = useMemo(
     () => ({
       ready,
@@ -395,6 +444,8 @@ export function RosterProvider({ children }: { children: React.ReactNode }) {
       savePassenger,
       updateProfile,
       resetDemo,
+      clearPastDuties,
+      clearRoster,
       markSynced,
       refreshSession,
     }),
@@ -412,6 +463,8 @@ export function RosterProvider({ children }: { children: React.ReactNode }) {
       savePassenger,
       updateProfile,
       resetDemo,
+      clearPastDuties,
+      clearRoster,
       markSynced,
       refreshSession,
     ],

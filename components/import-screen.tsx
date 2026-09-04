@@ -21,7 +21,7 @@ import { todayKey } from "@/lib/dates";
 import type { Duty, DutyType } from "@/lib/types";
 
 export function ImportScreen() {
-  const { importDuties, upsertDuty, updateProfile, profile, resetDemo, markSynced, refreshSession } = useRoster();
+  const { importDuties, upsertDuty, updateProfile, profile, resetDemo, clearPastDuties, clearRoster, markSynced, refreshSession, duties } = useRoster();
   const [url, setUrl] = useState(profile.icalUrl ?? "");
   const [replace, setReplace] = useState(false);
 
@@ -29,19 +29,31 @@ export function ImportScreen() {
     if (profile.icalUrl) setUrl(profile.icalUrl);
   }, [profile.icalUrl]);
   const [busy, setBusy] = useState(false);
+  const [fileStatus, setFileStatus] = useState<{
+    kind: "idle" | "reading" | "ok" | "error";
+    message: string;
+  }>({ kind: "idle", message: "" });
   const [unmatched, setUnmatched] = useState<string[]>([]);
 
-  async function applyDuties(duties: Duty[], leftover: string[]) {
+  async function applyDuties(duties: Duty[], leftover: string[], mode?: "merge" | "replace") {
     if (!duties.length) {
-      toast.error("No duties found in that file.");
+      const msg =
+        leftover.length > 0
+          ? `File read, but no duties recognised (${leftover.length} unmatched lines). Prefer CrewLink iCal.`
+          : "File read, but no duties found. Prefer CrewLink iCal / .ics.";
+      toast.error(msg);
       setUnmatched(leftover);
-      return;
+      setFileStatus({ kind: "error", message: msg });
+      return false;
     }
-    await importDuties(duties, replace ? "replace" : "merge");
+    await importDuties(duties, mode ?? (replace ? "replace" : "merge"));
     await markSynced();
     setUnmatched(leftover);
-    toast.success(`Imported ${duties.length} duties`);
+    const msg = `Imported ${duties.length} duties${leftover.length ? ` · ${leftover.length} unmatched lines` : ""}`;
+    toast.success(msg);
+    setFileStatus({ kind: "ok", message: msg });
     void refreshSession(true, true);
+    return true;
   }
 
   async function fetchIcal() {
@@ -63,14 +75,21 @@ export function ImportScreen() {
     }
   }
 
-  async function onFile(file: File) {
+  async function onFile(file: File, input?: HTMLInputElement | null) {
     setBusy(true);
+    setFileStatus({ kind: "reading", message: `Reading ${file.name}…` });
+    toast.message(`Reading ${file.name}…`);
     try {
       if (file.name.toLowerCase().endsWith(".pdf") || file.type === "application/pdf") {
         const text = await extractPdfText(file);
         const { parseRosterText } = await import("@/lib/parse-roster");
         const parsed = parseRosterText(text, "pdf");
-        await applyDuties(parsed.duties, parsed.unmatched);
+        const leftover =
+          parsed.duties.length === 0 && parsed.unmatched.length === 0 && text.length > 0
+            ? text.split(/\n/).map((l) => l.trim()).filter(Boolean).slice(0, 20)
+            : parsed.unmatched;
+        // NetLine PDF clocks are UTC; parser stores instants and UI shows airport-local.
+        await applyDuties(parsed.duties, leftover, "replace");
       } else {
         const text = await file.text();
         const { parseIcs } = await import("@/lib/parse-roster");
@@ -78,9 +97,16 @@ export function ImportScreen() {
         await applyDuties(parsed.duties, parsed.unmatched);
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not read file");
+      const message = err instanceof Error ? err.message : "Could not read file";
+      const friendly =
+        message.includes("readableStream") || message.includes("undefined is not a function")
+          ? "PDF reader failed in this browser. Try again, or import an .ics instead."
+          : message;
+      toast.error(friendly);
+      setFileStatus({ kind: "error", message: friendly });
     } finally {
       setBusy(false);
+      if (input) input.value = "";
     }
   }
 
@@ -128,12 +154,27 @@ export function ImportScreen() {
           <Input
             className="mt-3 h-11"
             type="file"
+            disabled={busy}
             accept=".ics,.ical,.ifb,text/calendar,application/pdf,.pdf"
             onChange={(e) => {
               const file = e.target.files?.[0];
-              if (file) void onFile(file);
+              if (file) void onFile(file, e.target);
             }}
           />
+          {fileStatus.kind !== "idle" ? (
+            <p
+              className={
+                fileStatus.kind === "ok"
+                  ? "mt-3 rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-900"
+                  : fileStatus.kind === "error"
+                    ? "mt-3 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-900"
+                    : "mt-3 rounded-xl bg-sky-50 px-3 py-2 text-sm text-sky-950"
+              }
+              role="status"
+            >
+              {fileStatus.kind === "reading" ? "Reading file…" : null} {fileStatus.message}
+            </p>
+          ) : null}
         </section>
 
         <ManualForm
@@ -155,6 +196,44 @@ export function ImportScreen() {
             </ul>
           </section>
         ) : null}
+
+        <section className="rounded-2xl bg-white p-4 ring-1 ring-black/5">
+          <h2 className="font-semibold">Manage roster</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {duties.length} duties stored on this device. Profile and iCal link are kept.
+          </p>
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+            <Button
+              variant="outline"
+              className="h-11 flex-1 rounded-full"
+              disabled={busy || !duties.some((d) => d.date < todayKey())}
+              onClick={() => {
+                void (async () => {
+                  const n = await clearPastDuties();
+                  toast.success(n ? `Deleted ${n} past duties` : "No past duties to delete");
+                })();
+              }}
+            >
+              Delete past duties
+            </Button>
+            <Button
+              variant="outline"
+              className="h-11 flex-1 rounded-full text-red-700 hover:bg-red-50 hover:text-red-800"
+              disabled={busy || !duties.length}
+              onClick={() => {
+                if (!window.confirm("Clear the entire roster on this device? Passengers and live cache go too.")) {
+                  return;
+                }
+                void (async () => {
+                  await clearRoster();
+                  toast.success("Roster cleared");
+                })();
+              }}
+            >
+              Clear entire roster
+            </Button>
+          </div>
+        </section>
 
         <Button variant="outline" className="h-11 rounded-full" onClick={() => void resetDemo()}>
           Restore demo week

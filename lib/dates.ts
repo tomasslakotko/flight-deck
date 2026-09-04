@@ -119,3 +119,45 @@ export function hhmmToToday(hhmm: string, day: Date) {
   if (!m) return undefined;
   return atLocal(day, Number(m[1]), Number(m[2]));
 }
+
+/**
+ * Build an absolute instant for a civil clock on `day` in an IANA zone
+ * (NetLine / airport-local times). Falls back to the browser local zone.
+ */
+export function atZoneOnDate(
+  day: Date,
+  hours: number,
+  minutes: number,
+  timeZone?: string,
+) {
+  if (!timeZone) return atLocal(day, hours, minutes);
+  const y = day.getFullYear();
+  const month = day.getMonth();
+  const date = day.getDate();
+  const want = hours * 60 + minutes;
+  let ms = Date.UTC(y, month, date, hours, minutes, 0);
+  for (let i = 0; i < 5; i++) {
+    const shown = formatClock(new Date(ms).toISOString(), timeZone);
+    const parts = shown.split(":").map(Number);
+    if (parts.length < 2 || parts.some((n) => Number.isNaN(n))) break;
+    const got = parts[0] * 60 + parts[1];
+    const delta = want - got;
+    if (delta === 0) {
+      // Keep the calendar day in-zone aligned with `day` when possible
+      const key = dateKeyInZone(new Date(ms), timeZone);
+      const target = dateKey(day);
+      if (key && key < target) ms += 24 * 60 * 60 * 1000;
+      else if (key && key > target) ms -= 24 * 60 * 60 * 1000;
+      else break;
+      continue;
+    }
+    ms += delta * 60_000;
+  }
+  return new Date(ms).toISOString();
+}
+
+export function hhmmOnDate(hhmm: string, day: Date, timeZone?: string) {
+  const m = hhmm.trim().replace(".", ":").match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return undefined;
+  return atZoneOnDate(day, Number(m[1]), Number(m[2]), timeZone);
+}

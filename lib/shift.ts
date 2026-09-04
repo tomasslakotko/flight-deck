@@ -346,6 +346,19 @@ export function nextDuty(duties: Duty[], now = new Date()) {
   return upcoming[0];
 }
 
+/** First flight pairing that starts after the current shift ends (check-out). */
+export function nextPairingAfter(duties: Duty[], afterIso?: string | null) {
+  const after = afterIso ? instant(afterIso)?.getTime() : undefined;
+  if (after == null) return null;
+  for (const group of flightPairings(duties)) {
+    const first = group[0];
+    if (!first) continue;
+    const start = instant(first.checkIn || first.std)?.getTime() ?? 0;
+    if (start > after) return group;
+  }
+  return null;
+}
+
 /** Prefer live status, but never keep "scheduled" after STA. */
 export function resolvedFlightStatus(duty: Duty, live?: LiveFlight | null, now = new Date()) {
   const raw = (live?.status ?? "").toLowerCase();

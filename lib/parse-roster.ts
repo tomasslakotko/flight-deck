@@ -3,6 +3,7 @@ import type { Duty, DutyType, ImportPreview } from "@/lib/types";
 import { airportTz, toFlightIata } from "@/lib/airports";
 import { dateKey, dateKeyInZone, hhmmToToday } from "@/lib/dates";
 import { parseCrewNotes } from "@/lib/parse-crew";
+import { looksLikeNetlineIdp, parseNetlineIdp } from "@/lib/parse-netline-pdf";
 import { pickAirportCode, pickAllRoutes, pickRoute } from "@/lib/route-text";
 
 const DUTY_MATCHERS: { type: DutyType; re: RegExp }[] = [
@@ -353,6 +354,11 @@ export function parseIcs(raw: string, source: Duty["source"] = "ical"): ImportPr
 }
 
 export function parseRosterText(raw: string, source: Duty["source"] = "pdf"): ImportPreview {
+  if (looksLikeNetlineIdp(raw)) {
+    const netline = parseNetlineIdp(raw, source);
+    if (netline.duties.length) return netline;
+  }
+
   const lines = raw
     .split(/\r?\n/)
     .map((l) => l.replace(/\s+/g, " ").trim())
