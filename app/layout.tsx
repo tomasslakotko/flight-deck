@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import { Providers } from "@/components/providers";
 import { RosterProvider } from "@/components/roster-provider";
+import { OpsRuntime } from "@/components/ops-runtime";
 import { PwaRegister } from "@/components/pwa-register";
 import "./globals.css";
 
@@ -17,12 +18,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "airBaltic Crew",
-  description: "Roster, live flight status, and passenger lists for airBaltic crew.",
-  applicationName: "airBaltic Crew",
+  title: "Flight Deck",
+  description: "Roster, live flight status, and passenger lists for cabin crew.",
+  applicationName: "Flight Deck",
   appleWebApp: {
     capable: true,
-    title: "BT Crew",
+    title: "Flight Deck",
     statusBarStyle: "default",
   },
   formatDetection: { telephone: false },
@@ -50,6 +51,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full flex flex-col">
         <Providers>
           <RosterProvider>
+            <OpsRuntime />
             {children}
             <Toaster theme="light" />
             <PwaRegister />

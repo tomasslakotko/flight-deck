@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Map, Plane } from "lucide-react";
+import { Map, Plane, StickyNote } from "lucide-react";
 import { airportCity, airportTz } from "@/lib/airports";
 import { resolvedFlightStatus } from "@/lib/shift";
 import { clocksDiffer, durationLabel, formatClock } from "@/lib/dates";
@@ -45,9 +45,14 @@ export function FlightCard({
 
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-sm font-semibold tracking-wide">{flightLabel}</div>
+          <div className="flex items-center gap-1.5 text-sm font-semibold tracking-wide">
+            {flightLabel}
+            {duty.privateNotes?.trim() ? (
+              <StickyNote className="size-3.5 text-amber-600" aria-label="Has private note" />
+            ) : null}
+          </div>
           <div className="text-xs text-muted-foreground">
-            {durationLabel(duty.std, duty.sta) || duty.aircraftType || "A220"}
+            {durationLabel(duty.std, duty.sta) || duty.aircraftType || "Flight"}
           </div>
         </div>
         <StatusBadge status={status} delayMin={live?.delayMin} />

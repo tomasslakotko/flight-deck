@@ -159,7 +159,7 @@ export function flightRouteLabel(duty: {
 
 export const AIRPORT_NOTES: Record<string, string> = {
   CPH: "Check in at the crew center, Level 1, Terminal 3. Allow extra time at security.",
-  RIX: "Crew briefing in room A, airside. Airport Wi-Fi: BT-Crew. Local SIMs at arrivals.",
+  RIX: "Crew briefing airside. Allow extra time at security.",
   AMS: "Crew report at D-pier crew center. Schiphol staff lane is marked “CREW”.",
   ARN: "Report at Terminal 5 crew security. Hotel shuttle bay is outside arrivals 2.",
 };

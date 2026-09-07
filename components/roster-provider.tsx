@@ -18,7 +18,15 @@ import { todayKey } from "@/lib/dates";
 import { toFlightIata } from "@/lib/airports";
 import { enrichDutyRoutes, flightsOnDate } from "@/lib/shift";
 import { dedupeFlightDuties } from "@/lib/parse-netline-pdf";
-import { parseSession, sessionIsFresh, type SessionStamp } from "@/lib/session";
+import {
+  ICAL_REFRESH_MS,
+  LIVE_REFRESH_MS,
+  icalIsStale,
+  liveIsStale,
+  parseSession,
+  sessionIsFresh,
+  type SessionStamp,
+} from "@/lib/session";
 import type { CrewProfile, Duty, LiveFlight, Passenger } from "@/lib/types";
 
 type Snapshot = {
@@ -34,6 +42,9 @@ type RosterContextValue = {
   profile: CrewProfile;
   liveByIata: Record<string, LiveFlight>;
   sessionLoading: boolean;
+  online: boolean;
+  session: SessionStamp | null;
+  syncError: string | null;
   importDuties: (incoming: Duty[], mode: "merge" | "replace") => Promise<Duty[]>;
   upsertDuty: (duty: Duty) => Promise<void>;
   deleteDuty: (id: string) => Promise<void>;
@@ -69,7 +80,6 @@ function normalizeDuties(duties: Duty[]) {
 function mergeDutyLists(prev: Duty[], incoming: Duty[], mode: "merge" | "replace") {
   const incomingIcal = incoming.some((d) => d.source === "ical");
   const incomingPdf = incoming.some((d) => d.source === "pdf");
-  // PDF / iCal from CrewLink replace auto-sourced roster; keep only manual extras.
   const base =
     mode === "replace"
       ? []
@@ -83,9 +93,24 @@ function mergeDutyLists(prev: Duty[], incoming: Duty[], mode: "merge" | "replace
     const existing = byUid.get(duty.uid);
     if (existing) {
       const idx = next.findIndex((d) => d.id === existing.id);
-      if (idx >= 0) next[idx] = { ...duty, id: existing.id };
+      if (idx >= 0) {
+        next[idx] = {
+          ...duty,
+          id: existing.id,
+          privateNotes: duty.privateNotes ?? existing.privateNotes,
+        };
+      }
     } else if (!seen.has(duty.id)) {
-      next.push(duty);
+      // Keep private notes if same sector was stored under another uid
+      const twin = next.find(
+        (d) =>
+          d.date === duty.date &&
+          (d.flightNumber ?? "") === (duty.flightNumber ?? "") &&
+          (d.depIata ?? "") === (duty.depIata ?? "") &&
+          (d.arrIata ?? "") === (duty.arrIata ?? "") &&
+          d.privateNotes,
+      );
+      next.push(twin ? { ...duty, privateNotes: twin.privateNotes } : duty);
       seen.add(duty.id);
     }
   }
@@ -136,10 +161,13 @@ export function RosterProvider({ children }: { children: React.ReactNode }) {
   const dutiesRef = useRef<Duty[]>(demo.duties);
   const profileRef = useRef<CrewProfile>(demo.profile);
   const sessionRef = useRef<SessionStamp | null>(null);
+  const liveRef = useRef<Record<string, LiveFlight>>({});
   const bootstrapping = useRef(false);
   const [ready] = useState(true);
   const [hydrated, setHydrated] = useState(false);
   const [sessionLoading, setSessionLoading] = useState(true);
+  const [online, setOnline] = useState(true);
+  const [syncError, setSyncError] = useState<string | null>(null);
   const [duties, setDuties] = useState<Duty[]>(demo.duties);
   const [passengers, setPassengers] = useState<Passenger[]>(demo.passengers);
   const [profile, setProfile] = useState<CrewProfile>(demo.profile);
@@ -149,6 +177,7 @@ export function RosterProvider({ children }: { children: React.ReactNode }) {
   dutiesRef.current = duties;
   profileRef.current = profile;
   sessionRef.current = session;
+  liveRef.current = liveByIata;
 
   const apply = useCallback((next: Snapshot) => {
     setDuties(normalizeDuties(next.duties));
@@ -158,6 +187,17 @@ export function RosterProvider({ children }: { children: React.ReactNode }) {
 
   const markDirty = useCallback(() => {
     dirty.current = true;
+  }, []);
+
+  useEffect(() => {
+    const sync = () => setOnline(typeof navigator !== "undefined" ? navigator.onLine : true);
+    sync();
+    window.addEventListener("online", sync);
+    window.addEventListener("offline", sync);
+    return () => {
+      window.removeEventListener("online", sync);
+      window.removeEventListener("offline", sync);
+    };
   }, []);
 
   useEffect(() => {
@@ -311,16 +351,41 @@ export function RosterProvider({ children }: { children: React.ReactNode }) {
   const refreshSession = useCallback(
     async (force = false, silent = false) => {
       if (bootstrapping.current) return;
-      if (!force && sessionIsFresh(sessionRef.current)) {
+      const offline = typeof navigator !== "undefined" && !navigator.onLine;
+      if (offline) {
+        setOnline(false);
+        setSyncError("Offline — showing cached roster and live status");
         setSessionLoading(false);
+        const prev = sessionRef.current;
+        if (prev) {
+          const stamp = { ...prev, offline: true, error: "offline" };
+          sessionRef.current = stamp;
+          setSession(stamp);
+        }
         return;
       }
+
+      if (!force && sessionIsFresh(sessionRef.current) && !icalIsStale(sessionRef.current) && !liveIsStale(sessionRef.current)) {
+        setSessionLoading(false);
+        setSyncError(null);
+        return;
+      }
+
       bootstrapping.current = true;
       setSessionLoading(true);
+      let icalAt = sessionRef.current?.icalAt;
+      let liveAt = sessionRef.current?.liveAt;
+      let error: string | undefined;
+
       try {
         let nextDuties = dutiesRef.current;
         const icalUrl = profileRef.current.icalUrl?.trim();
-        if (icalUrl) {
+        const wantIcal =
+          Boolean(icalUrl) &&
+          profileRef.current.autoRefreshIcal !== false &&
+          (force || icalIsStale(sessionRef.current));
+
+        if (wantIcal && icalUrl) {
           try {
             const text = await downloadIcs(icalUrl);
             const { parseIcs } = await import("@/lib/parse-roster");
@@ -328,40 +393,62 @@ export function RosterProvider({ children }: { children: React.ReactNode }) {
             if (parsed.duties.length) {
               nextDuties = await importDuties(parsed.duties, "merge");
             }
+            icalAt = Date.now();
           } catch (err) {
-            if (force && !silent) {
-              toast.error(err instanceof Error ? err.message : "Roster update failed");
-            }
+            error = err instanceof Error ? err.message : "Roster update failed";
+            if (force && !silent) toast.error(error);
           }
         }
 
         const codes = todayFlightCodes(nextDuties);
-        if (codes.length) {
-          const res = await fetch(
-            `/api/flights/live?flights=${encodeURIComponent(codes.join(","))}`,
-          );
-          if (!res.ok) throw new Error("Live lookup failed");
-          const json = (await res.json()) as { flights?: LiveFlight[] } | LiveFlight;
-          const rows = Array.isArray((json as { flights?: LiveFlight[] }).flights)
-            ? (json as { flights: LiveFlight[] }).flights
-            : "flightIata" in json
-              ? [json]
-              : [];
-          const byIata = Object.fromEntries(rows.map((row) => [row.flightIata, row]));
-          setLiveByIata(byIata);
-          await persistLive(rows);
+        const wantLive = force || liveIsStale(sessionRef.current) || !sessionIsFresh(sessionRef.current);
+        if (codes.length && wantLive) {
+          try {
+            const res = await fetch(
+              `/api/flights/live?flights=${encodeURIComponent(codes.join(","))}`,
+            );
+            if (!res.ok) throw new Error("Live lookup failed");
+            const json = (await res.json()) as { flights?: LiveFlight[] } | LiveFlight;
+            const rows = Array.isArray((json as { flights?: LiveFlight[] }).flights)
+              ? (json as { flights: LiveFlight[] }).flights
+              : "flightIata" in json
+                ? [json]
+                : [];
+            if (rows.length) {
+              const byIata = Object.fromEntries(rows.map((row) => [row.flightIata, row]));
+              setLiveByIata(byIata);
+              await persistLive(rows);
+              liveAt = Date.now();
+            }
+          } catch (err) {
+            // Keep cached live flights — offline-first
+            error = err instanceof Error ? err.message : "Live update failed";
+            if (force && !silent && !icalAt) toast.error(error);
+          }
         }
 
-        const stamp: SessionStamp = { at: Date.now(), date: todayKey() };
+        const stamp: SessionStamp = {
+          at: Date.now(),
+          date: todayKey(),
+          icalAt,
+          liveAt,
+          offline: false,
+          error,
+        };
         sessionRef.current = stamp;
         setSession(stamp);
         await persistSession(stamp);
         await markSynced();
-        if (force && !silent) toast.success("Roster and today’s flights updated");
-      } catch (err) {
-        if (force && !silent) {
-          toast.error(err instanceof Error ? err.message : "Refresh failed");
+        setSyncError(error ? `${error} · using cached data where needed` : null);
+        setOnline(true);
+        if (force && !silent && !error) toast.success("Roster and today’s flights updated");
+        if (force && !silent && error && (icalAt || liveAt || Object.keys(liveRef.current).length)) {
+          toast.message("Updated with cached fallback", { description: error });
         }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Refresh failed";
+        setSyncError(`${msg} · showing cached data`);
+        if (force && !silent) toast.error(msg);
       } finally {
         bootstrapping.current = false;
         setSessionLoading(false);
@@ -375,6 +462,31 @@ export function RosterProvider({ children }: { children: React.ReactNode }) {
     void refreshSession(false);
   }, [hydrated, refreshSession]);
 
+  // Periodic auto-refresh + resume on focus / online
+  useEffect(() => {
+    if (!hydrated) return;
+    const tick = () => {
+      void refreshSession(false, true);
+    };
+    const onVis = () => {
+      if (document.visibilityState === "visible") tick();
+    };
+    const onOnline = () => {
+      setOnline(true);
+      void refreshSession(true, true);
+    };
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("focus", onVis);
+    window.addEventListener("online", onOnline);
+    const id = window.setInterval(tick, Math.min(ICAL_REFRESH_MS, LIVE_REFRESH_MS));
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("focus", onVis);
+      window.removeEventListener("online", onOnline);
+      window.clearInterval(id);
+    };
+  }, [hydrated, refreshSession]);
+
   const resetDemo = useCallback(async () => {
     markDirty();
     const fresh = memoryDemo();
@@ -383,6 +495,7 @@ export function RosterProvider({ children }: { children: React.ReactNode }) {
     profileRef.current = fresh.profile;
     setLiveByIata({});
     setSession(null);
+    setSyncError(null);
     void tryStorage(async () => {
       await db.duties.clear();
       await db.passengers.clear();
@@ -421,6 +534,7 @@ export function RosterProvider({ children }: { children: React.ReactNode }) {
     setLiveByIata({});
     setSession(null);
     sessionRef.current = null;
+    setSyncError(null);
     await tryStorage(async () => {
       await db.duties.clear();
       await db.passengers.clear();
@@ -437,6 +551,9 @@ export function RosterProvider({ children }: { children: React.ReactNode }) {
       profile,
       liveByIata,
       sessionLoading,
+      online,
+      session,
+      syncError,
       importDuties,
       upsertDuty,
       deleteDuty,
@@ -456,6 +573,9 @@ export function RosterProvider({ children }: { children: React.ReactNode }) {
       profile,
       liveByIata,
       sessionLoading,
+      online,
+      session,
+      syncError,
       importDuties,
       upsertDuty,
       deleteDuty,

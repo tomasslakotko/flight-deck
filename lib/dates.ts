@@ -20,6 +20,17 @@ export function weekDays(anchor = new Date()) {
   return Array.from({ length: 7 }, (_, i) => addDays(start, i));
 }
 
+/** Calendar cells for a month grid (Mon–Sun), including leading/trailing days. */
+export function monthGridDays(anchor = new Date()) {
+  const first = startOfDay(new Date(anchor.getFullYear(), anchor.getMonth(), 1));
+  const start = mondayOf(first);
+  return Array.from({ length: 42 }, (_, i) => addDays(start, i));
+}
+
+export function sameMonth(a: Date, b: Date) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth();
+}
+
 export function dateKey(date: Date) {
   return format(date, "yyyy-MM-dd");
 }

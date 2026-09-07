@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { format, parseISO } from "date-fns";
-import { Bed } from "lucide-react";
+import { Bed, StickyNote } from "lucide-react";
 import { formatClock } from "@/lib/dates";
 import { airportTz, flightRouteLabel } from "@/lib/airports";
 import { isFlightDuty, type ShiftContinuation } from "@/lib/shift";
@@ -80,7 +80,12 @@ export function WeekGrid({
                     <span className="text-xs font-semibold">
                       {flightRouteLabel(f)}
                     </span>
-                    <StatusBadge />
+                    <span className="flex items-center gap-1">
+                      {f.privateNotes?.trim() ? (
+                        <StickyNote className="size-3 text-amber-600" aria-label="Has private note" />
+                      ) : null}
+                      <StatusBadge />
+                    </span>
                   </div>
                   <div className="mt-1 text-[11px] text-slate-500">
                     {f.flightNumber} · {formatClock(f.std, airportTz(f.depIata))}–{formatClock(f.sta, airportTz(f.arrIata))}

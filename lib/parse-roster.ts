@@ -34,7 +34,7 @@ function shortHash(seed: string) {
   return (h >>> 0).toString(36);
 }
 
-/** Stable unique ids — CrewLink UIDs collide if we only keep the first 80 chars. */
+/** Stable unique ids — long calendar UIDs collide if we only keep the first 80 chars. */
 function uid(prefix: string, seed: string) {
   const clean = seed.replace(/[^A-Za-z0-9-]/g, "");
   if (clean.length <= 96) return `${prefix}-${clean}`;

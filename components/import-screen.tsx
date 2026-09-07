@@ -24,6 +24,7 @@ export function ImportScreen() {
   const { importDuties, upsertDuty, updateProfile, profile, resetDemo, clearPastDuties, clearRoster, markSynced, refreshSession, duties } = useRoster();
   const [url, setUrl] = useState(profile.icalUrl ?? "");
   const [replace, setReplace] = useState(false);
+  const [notifBusy, setNotifBusy] = useState(false);
 
   useEffect(() => {
     if (profile.icalUrl) setUrl(profile.icalUrl);
@@ -35,12 +36,40 @@ export function ImportScreen() {
   }>({ kind: "idle", message: "" });
   const [unmatched, setUnmatched] = useState<string[]>([]);
 
+  async function toggleNotifications(on: boolean) {
+    setNotifBusy(true);
+    try {
+      if (!on) {
+        await updateProfile({ notificationsEnabled: false });
+        toast.message("Notifications off");
+        return;
+      }
+      const { requestNotificationPermission, notificationSupported } = await import(
+        "@/lib/notifications"
+      );
+      if (!notificationSupported()) {
+        toast.error("Notifications are not supported in this browser");
+        return;
+      }
+      const perm = await requestNotificationPermission();
+      if (perm !== "granted") {
+        await updateProfile({ notificationsEnabled: false });
+        toast.error("Notification permission denied");
+        return;
+      }
+      await updateProfile({ notificationsEnabled: true });
+      toast.success("Alerts on for check-in, boarding, and delays");
+    } finally {
+      setNotifBusy(false);
+    }
+  }
+
   async function applyDuties(duties: Duty[], leftover: string[], mode?: "merge" | "replace") {
     if (!duties.length) {
       const msg =
         leftover.length > 0
-          ? `File read, but no duties recognised (${leftover.length} unmatched lines). Prefer CrewLink iCal.`
-          : "File read, but no duties found. Prefer CrewLink iCal / .ics.";
+          ? `File read, but no duties recognised (${leftover.length} unmatched lines). Prefer an iCal export.`
+          : "File read, but no duties found. Prefer an iCal / .ics roster export.";
       toast.error(msg);
       setUnmatched(leftover);
       setFileStatus({ kind: "error", message: msg });
@@ -133,7 +162,8 @@ export function ImportScreen() {
         <section className="rounded-2xl bg-white p-4 ring-1 ring-black/5">
           <h2 className="font-semibold">iCal link</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Paste the CrewLink / webcal URL airBaltic publishes. We never store your airline password.
+            Paste your roster iCal / webcal URL. We never store your airline password.
+            With a link saved, the roster auto-refreshes about every 30 minutes while the app is open.
           </p>
           <Input
             className="mt-3 h-11"
@@ -141,8 +171,37 @@ export function ImportScreen() {
             value={url}
             onChange={(e) => setUrl(e.target.value)}
           />
+          <label className="mt-3 flex h-11 items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="size-4"
+              checked={profile.autoRefreshIcal !== false}
+              onChange={(e) => void updateProfile({ autoRefreshIcal: e.target.checked })}
+            />
+            Auto-refresh iCal in the background
+          </label>
           <Button className="mt-3 h-11 w-full rounded-full" disabled={busy} onClick={() => void fetchIcal()}>
             {busy ? "Importing…" : "Subscribe & import"}
+          </Button>
+        </section>
+
+        <section className="rounded-2xl bg-white p-4 ring-1 ring-black/5">
+          <h2 className="font-semibold">Local notifications</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Check-in (−15 min / at report), boarding (−30 min STD), and delay alerts while this device is
+            awake. Works best as an installed PWA.
+          </p>
+          <Button
+            className="mt-3 h-11 w-full rounded-full"
+            variant={profile.notificationsEnabled ? "outline" : "default"}
+            disabled={notifBusy}
+            onClick={() => void toggleNotifications(!profile.notificationsEnabled)}
+          >
+            {notifBusy
+              ? "Updating…"
+              : profile.notificationsEnabled
+                ? "Turn notifications off"
+                : "Enable notifications"}
           </Button>
         </section>
 

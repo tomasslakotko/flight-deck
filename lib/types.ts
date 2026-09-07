@@ -25,6 +25,8 @@ export interface Duty {
   sta?: string;
   checkIn?: string;
   notes?: string;
+  /** Device-only crew notes; preserved across roster re-imports. */
+  privateNotes?: string;
   hotelName?: string;
   position?: string;
   aircraftType?: string;
@@ -57,6 +59,10 @@ export interface CrewProfile {
   position: string;
   icalUrl?: string;
   lastSyncedAt?: number;
+  /** Auto-pull roster iCal while the app is open (default true when URL set). */
+  autoRefreshIcal?: boolean;
+  /** Local check-in / boarding / delay notifications. */
+  notificationsEnabled?: boolean;
 }
 
 export interface LiveFlight {

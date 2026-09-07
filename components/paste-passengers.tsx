@@ -73,7 +73,7 @@ export function PastePassengers({
           <p className="text-sm text-muted-foreground">
             {preorderMode
               ? "Paste the special-meal preorder. Meals merge onto existing seats and do not replace the passenger list."
-              : "Paste an airBaltic ONBOARD LIST, seat/name lines, or CSV. Nothing is uploaded to a server."}
+              : "Paste an ONBOARD LIST, seat/name lines, or CSV. Nothing is uploaded to a server."}
           </p>
         </SheetHeader>
         <Textarea

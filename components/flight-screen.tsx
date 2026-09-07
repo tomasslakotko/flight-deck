@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Users } from "lucide-react";
+import { ArrowLeft, StickyNote, Users } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { StatusBadge } from "@/components/status-badge";
 import { useRoster } from "@/components/roster-provider";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { airportCity, airportTz, flightRouteLabel } from "@/lib/airports";
 import { clocksDiffer, durationLabel, formatClock, formatLongDate } from "@/lib/dates";
 import { useLiveFlight } from "@/hooks/use-live-flight";
@@ -16,13 +18,36 @@ import { cn } from "@/lib/utils";
 
 export function FlightScreen() {
   const params = useParams<{ id: string }>();
-  const { duties, profile } = useRoster();
+  const { duties, profile, upsertDuty } = useRoster();
   const duty = duties.find((d) => d.id === params.id);
   const { data: live, loading } = useLiveFlight(duty?.flightNumber);
   const phase = duty ? phaseForFlight(duty) : "pre";
   const phases = duty ? phaseSchedule(duty) : [];
   const depTz = airportTz(duty?.depIata);
   const arrTz = airportTz(duty?.arrIata);
+  const [privateNotes, setPrivateNotes] = useState(duty?.privateNotes ?? "");
+  const [noteSaved, setNoteSaved] = useState(false);
+
+  useEffect(() => {
+    setPrivateNotes(duty?.privateNotes ?? "");
+  }, [duty?.id, duty?.privateNotes]);
+
+  useEffect(() => {
+    if (!duty) return;
+    const next = privateNotes.trim();
+    const prev = (duty.privateNotes ?? "").trim();
+    if (next === prev) return;
+    const id = window.setTimeout(() => {
+      void upsertDuty({
+        ...duty,
+        privateNotes: next || undefined,
+      }).then(() => {
+        setNoteSaved(true);
+        window.setTimeout(() => setNoteSaved(false), 1500);
+      });
+    }, 500);
+    return () => window.clearTimeout(id);
+  }, [privateNotes, duty, upsertDuty]);
 
   if (!duty) {
     return (
@@ -83,7 +108,11 @@ export function FlightScreen() {
         </div>
 
         <div className="grid gap-3 sm:grid-cols-3">
-          <InfoCard label="Aircraft" value={live?.registration ?? "—"} hint={live?.aircraftType ?? duty.aircraftType ?? "A220-300"} />
+          <InfoCard
+            label="Aircraft"
+            value={live?.registration ?? "—"}
+            hint={live?.aircraftType ?? duty.aircraftType ?? "—"}
+          />
           <InfoCard
             label="Gate"
             value={live?.depGate ?? "—"}
@@ -115,6 +144,24 @@ export function FlightScreen() {
           position={duty.position ?? profile.position}
           name={profile.name}
         />
+
+        <article className="rounded-2xl bg-white p-4 ring-1 ring-black/5">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
+              <StickyNote className="size-3.5" />
+              Private notes
+            </div>
+            <span className="text-[11px] text-muted-foreground">
+              {noteSaved ? "Saved" : "Only on this device"}
+            </span>
+          </div>
+          <Textarea
+            value={privateNotes}
+            onChange={(e) => setPrivateNotes(e.target.value)}
+            placeholder="Galley, VIP, deadhead, personal reminders…"
+            className="min-h-24 resize-y"
+          />
+        </article>
 
         <Button asChild className="h-12 rounded-full">
           <Link href={`/flight/${duty.id}/passengers`}>
@@ -187,7 +234,7 @@ function CrewAndNotes({
       {leftover ? (
         <article className="rounded-2xl bg-white p-4 text-sm ring-1 ring-black/5">
           <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
-            Notes
+            Roster notes
           </div>
           <p className="whitespace-pre-line text-pretty">{leftover}</p>
         </article>

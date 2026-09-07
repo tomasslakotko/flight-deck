@@ -2,9 +2,9 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "airBaltic Crew",
-    short_name: "BT Crew",
-    description: "Roster, live flight status, and passenger lists for airBaltic crew.",
+    name: "Flight Deck",
+    short_name: "Deck",
+    description: "Roster, live flight status, and passenger lists for cabin crew.",
     start_url: "/",
     display: "standalone",
     background_color: "#F0F4F8",

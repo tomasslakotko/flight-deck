@@ -1,67 +1,26 @@
-# airBaltic Crew
+# Flight Deck
 
-Installable roster PWA for airBaltic cabin crew. Built for iPhone and iPad in the browser (Add to Home Screen), hosted on Vercel, no paid APIs required.
+Installable roster PWA for cabin crew. Built for phone and tablet in the browser (Add to Home Screen), hosted on Vercel.
 
-**EN:** Import a roster, see today's shift, and look up live status, registration, and ETD. Paste a passenger list per flight. Data stays on the device (IndexedDB).
+## Features
 
-**RU:** Импортируйте ростер, смотрите смену и живой статус рейса, регистрацию борта и ETD. Список пассажиров вставляется текстом. Данные хранятся на устройстве.
+- Import roster via **iCal / webcal URL** or **PDF / .ics** (NetLine IDP and similar)
+- Live flight status for today’s sectors
+- Passenger list + seat map from pasted onboard lists
+- Private per-flight notes (device-only)
+- Week and month schedule views
+- Local check-in / boarding / delay notifications
+- Offline-friendly cached roster and live status
 
-## Run locally
+## Import
 
-```bash
-npm install
-cp .env.example .env.local
-# paste AIRLABS_API_KEY and/or AVIATIONSTACK_API_KEY (optional — the app works without them)
-npm run dev
-```
-
-Open [http://127.0.0.1:43173](http://127.0.0.1:43173).
-
-On iPhone/iPad Safari: Share → Add to Home Screen.
-
-## Roster import
-
-- **iCal / webcal URL** from CrewLink (fetched through `/api/roster/ical` because Safari blocks calendar CORS)
-- **`.ics` file** or **PDF** (PDF text is extracted in the browser)
-- **Manual** duty / flight entry
+1. Paste your airline roster iCal / webcal URL (fetched through `/api/roster/ical`)
+2. Or drop a PDF / `.ics` file — parsing stays on the device
 
 A sample calendar is at `public/samples/airbaltic-roster.ics`.
 
-We do **not** log into CrewLink with your airline password.
+We do **not** log into your airline portal with your password.
 
-## Live flight data (free)
+## Live flights
 
-`GET /api/flights/live?flightIata=BT139` merges, with a 3-minute cache:
-
-1. [AirLabs](https://airlabs.co) — status, registration, ETD/ETA, gate (`AIRLABS_API_KEY`)
-2. [AviationStack](https://aviationstack.com) — status, registration, actual times, gate (`AVIATIONSTACK_API_KEY`)
-3. [adsb.lol](https://api.adsb.lol) — live position / callsign `BTI139`
-4. [hexdb.io](https://hexdb.io) — registration from ICAO24
-5. [OpenSky](https://opensky-network.org) — fallback position
-
-If every source misses, roster STD/STA still show and the card says live data is unavailable.
-
-Rotate the AirLabs key if it was ever pasted into chat, and keep it only in Vercel env / `.env.local`.
-
-## Passenger list
-
-On a flight → Passenger list → Paste. Supported today:
-
-```
-12A  SMITH/JOHN MR  VGML  WCHR
-DOE/JANE MS  4A  Gold
-Seat,Name,Meal
-1A,BERZINS/JANIS,VGML
-```
-
-Send a real airBaltic dump later to tighten the parser. Lists never leave the device.
-
-## Deploy on Vercel (Hobby / free)
-
-1. Push this repo and import it in Vercel
-2. Set `AIRLABS_API_KEY` and/or `AVIATIONSTACK_API_KEY`
-3. Deploy
-
-## Stack
-
-Next.js App Router, Tailwind, shadcn/ui, Dexie, ical.js, PDF.js.
+Uses public flight-data APIs when configured. Lists and roster data stay on the device (IndexedDB).

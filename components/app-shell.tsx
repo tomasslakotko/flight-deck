@@ -10,12 +10,14 @@ import {
   Plane,
   RefreshCw,
   Upload,
+  WifiOff,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useRoster } from "@/components/roster-provider";
 import { DutyTimeline } from "@/components/duty-timeline";
 import { dutiesOnDate, shiftBounds } from "@/lib/shift";
 import { todayKey } from "@/lib/dates";
+import { formatSyncedAgo } from "@/lib/session";
 import { Button } from "@/components/ui/button";
 
 const NAV = [
@@ -32,29 +34,39 @@ export function AppShell({
   wide?: boolean;
 }) {
   const pathname = usePathname();
-  const { profile, duties, refreshSession, sessionLoading } = useRoster();
+  const {
+    profile,
+    duties,
+    refreshSession,
+    sessionLoading,
+    online,
+    syncError,
+    session,
+    liveByIata,
+  } = useRoster();
   const date = todayKey();
   const bounds = shiftBounds(duties, date);
   const todayDuties = dutiesOnDate(duties, date);
   const [mounted, setMounted] = useState(false);
   const [syncedLabel, setSyncedLabel] = useState<string | null>(null);
+  const [liveLabel, setLiveLabel] = useState<string | null>(null);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
   useEffect(() => {
-    if (!profile.lastSyncedAt) {
-      setSyncedLabel(null);
-      return;
-    }
-    setSyncedLabel(
-      new Date(profile.lastSyncedAt).toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-    );
-  }, [profile.lastSyncedAt]);
+    const tick = () => {
+      setSyncedLabel(formatSyncedAgo(profile.lastSyncedAt));
+      setLiveLabel(formatSyncedAgo(session?.liveAt));
+    };
+    tick();
+    const id = window.setInterval(tick, 30_000);
+    return () => window.clearInterval(id);
+  }, [profile.lastSyncedAt, session?.liveAt]);
+
+  const hasCachedLive = Object.keys(liveByIata).length > 0;
+  const showOfflineBanner = !online || Boolean(syncError);
 
   function navActive(href: string) {
     if (!mounted) return href === "/";
@@ -66,7 +78,7 @@ export function AppShell({
       <aside className="hidden w-60 shrink-0 flex-col border-r bg-white md:flex">
         <div className="px-5 pt-6 pb-4">
           <div className="text-lg font-semibold tracking-tight">
-            airBaltic <span className="text-primary">Crew</span>
+            Flight <span className="text-primary">Deck</span>
           </div>
           <div className="text-xs text-muted-foreground">Roster · live ops</div>
         </div>
@@ -94,6 +106,7 @@ export function AppShell({
           name={profile.name}
           position={profile.position}
           synced={syncedLabel}
+          online={online}
           onRefresh={() => void refreshSession(true)}
           refreshing={sessionLoading}
         />
@@ -103,10 +116,11 @@ export function AppShell({
         <header className="flex items-center justify-between px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2 md:hidden">
           <div>
             <div className="text-sm font-semibold">
-              airBaltic <span className="text-primary">Crew</span>
+              Flight <span className="text-primary">Deck</span>
             </div>
             <div className="text-[11px] text-muted-foreground">
               {profile.position} · {profile.name}
+              {syncedLabel ? ` · Synced ${syncedLabel}` : null}
             </div>
           </div>
           <Button asChild variant="ghost" size="icon" className="size-11">
@@ -115,6 +129,40 @@ export function AppShell({
             </Link>
           </Button>
         </header>
+
+        {showOfflineBanner ? (
+          <div
+            className={cn(
+              "mx-4 mb-1 flex items-start gap-2 rounded-xl px-3 py-2 text-xs",
+              !online
+                ? "bg-amber-50 text-amber-950 ring-1 ring-amber-200/80"
+                : "bg-slate-100 text-slate-700 ring-1 ring-slate-200/80",
+            )}
+            role="status"
+          >
+            <WifiOff className="mt-0.5 size-3.5 shrink-0 opacity-80" />
+            <div className="min-w-0 flex-1">
+              <div className="font-medium">
+                {!online ? "Offline — cached roster" : "Using cached live data"}
+              </div>
+              <div className="opacity-80">
+                {syncError ??
+                  (hasCachedLive && liveLabel
+                    ? `Live status from ${liveLabel}`
+                    : "Roster stays on this device until you’re back online.")}
+              </div>
+            </div>
+            {online ? (
+              <button
+                type="button"
+                className="shrink-0 font-medium underline"
+                onClick={() => void refreshSession(true)}
+              >
+                Retry
+              </button>
+            ) : null}
+          </div>
+        ) : null}
 
         <main
           className={cn(
@@ -131,6 +179,7 @@ export function AppShell({
               <MiniProfile
                 name={profile.name}
                 synced={syncedLabel}
+                online={online}
                 onRefresh={() => void refreshSession(true)}
                 refreshing={sessionLoading}
               />
@@ -177,22 +226,24 @@ function ProfileBlock({
   name,
   position,
   synced,
+  online,
   onRefresh,
   refreshing,
 }: {
   name: string;
   position: string;
   synced: string | null;
+  online: boolean;
   onRefresh: () => void;
   refreshing?: boolean;
 }) {
   return (
     <div className="flex items-center gap-3 border-t px-4 py-4">
-      <Avatar name={name} />
+      <Avatar name={name} online={online} />
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm font-semibold">{name}</div>
         <div className="text-[11px] text-muted-foreground">
-          {position} · Last synced {synced ?? "—"}
+          {position} · {online ? `Synced ${synced ?? "—"}` : "Offline"}
         </div>
       </div>
       <button
@@ -210,21 +261,23 @@ function ProfileBlock({
 function MiniProfile({
   name,
   synced,
+  online,
   onRefresh,
   refreshing,
 }: {
   name: string;
   synced: string | null;
+  online: boolean;
   onRefresh: () => void;
   refreshing?: boolean;
 }) {
   return (
     <div className="flex items-center gap-2 pr-2">
-      <Avatar name={name} />
+      <Avatar name={name} online={online} />
       <div>
         <div className="text-xs font-semibold">{name}</div>
         <div className="text-[10px] text-muted-foreground">
-          Last synced {synced ?? "—"}
+          {online ? `Synced ${synced ?? "—"}` : "Offline · cached"}
         </div>
       </div>
       <button
@@ -239,11 +292,16 @@ function MiniProfile({
   );
 }
 
-function Avatar({ name }: { name: string }) {
+function Avatar({ name, online }: { name: string; online: boolean }) {
   return (
     <div className="relative flex size-9 items-center justify-center rounded-full bg-sky-100 text-xs font-semibold text-sky-800">
       {name.slice(0, 1)}
-      <span className="absolute right-0 bottom-0 size-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />
+      <span
+        className={cn(
+          "absolute right-0 bottom-0 size-2.5 rounded-full ring-2 ring-white",
+          online ? "bg-emerald-500" : "bg-amber-400",
+        )}
+      />
     </div>
   );
 }

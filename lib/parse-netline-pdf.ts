@@ -2,7 +2,7 @@ import type { Duty, ImportPreview } from "@/lib/types";
 import { toFlightIata } from "@/lib/airports";
 import { dateKey, hhmmOnDate, parseFlightInstant } from "@/lib/dates";
 
-/** NetLine/CrewLink IDP clocks are UTC (same as crew iCal Zulu). */
+/** NetLine / duty-plan PDF clocks are UTC (same as crew iCal Zulu). */
 const NETLINE_TZ = "UTC";
 
 const MONTHS: Record<string, number> = {
@@ -139,7 +139,7 @@ function byKeyOrNear(map: Map<string, Duty>, key: string, duty: Duty) {
   return undefined;
 }
 
-/** Parse airBaltic / NetLine CrewLink Individual Duty Plan PDF text. */
+/** Parse NetLine-style Individual Duty Plan PDF text. */
 export function parseNetlineIdp(raw: string, source: Duty["source"] = "pdf"): ImportPreview {
   const text = raw.replace(/\s+/g, " ").trim();
   const unmatched: string[] = [];
