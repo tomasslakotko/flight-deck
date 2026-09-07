@@ -1,0 +1,466 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		04AFA24D1C1C5776EC8760FE /* FlightDeckWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = DA03EEC134A5DE3A797FA51B /* FlightDeckWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		5B2B3433902F6AEBBCFE54B2 /* Widgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EB15F0C3CFB6244A90C75E6 /* Widgets.swift */; };
+		5E828258151062E07895C744 /* FlightDeckApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C824400B279C7EB2518A16D /* FlightDeckApp.swift */; };
+		7D7573450E616701B46A0075 /* FlightDeckWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35073D6481653FF90168FEEE /* FlightDeckWidgetBundle.swift */; };
+		87F6327979A2DF758EE7C003 /* WidgetStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5D882A43E3B20AB965799BB /* WidgetStore.swift */; };
+		B73C9524D91591AFF27CBE0B /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91C6CD715B79E10B1EEEA4FB /* ContentView.swift */; };
+		DDF1D8067E19D033D28E68E3 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B1E3C9E012CCE9F5C561BF66 /* Assets.xcassets */; };
+		F3BD8A4635E82370075650F9 /* WidgetStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5D882A43E3B20AB965799BB /* WidgetStore.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		8335B5841833AD39A47DF6C3 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 42B5C3DBE8F2D12AC89C6C42 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 755A7F772B5DFC408EBEBC4F;
+			remoteInfo = FlightDeckWidget;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		2D5E5FFECEE8442245352288 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				04AFA24D1C1C5776EC8760FE /* FlightDeckWidget.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		35073D6481653FF90168FEEE /* FlightDeckWidgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlightDeckWidgetBundle.swift; sourceTree = "<group>"; };
+		498AE2F5E8330CE5F04BBD52 /* FlightDeck.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = FlightDeck.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		4CB44F7ED3E105CB4AC0BD9A /* FlightDeckWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = FlightDeckWidget.entitlements; sourceTree = "<group>"; };
+		5E8EBA1CB38399FA91045E85 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		5EB15F0C3CFB6244A90C75E6 /* Widgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Widgets.swift; sourceTree = "<group>"; };
+		6C824400B279C7EB2518A16D /* FlightDeckApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlightDeckApp.swift; sourceTree = "<group>"; };
+		91C6CD715B79E10B1EEEA4FB /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		B09CBF9EBB0438D0D6973B9E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		B1E3C9E012CCE9F5C561BF66 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		B97B75C9245BFD9CEC60A608 /* FlightDeck.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = FlightDeck.entitlements; sourceTree = "<group>"; };
+		DA03EEC134A5DE3A797FA51B /* FlightDeckWidget.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = FlightDeckWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		E5D882A43E3B20AB965799BB /* WidgetStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetStore.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		01D45CE5B66E15115D0F0E42 /* FlightDeckWidget */ = {
+			isa = PBXGroup;
+			children = (
+				4CB44F7ED3E105CB4AC0BD9A /* FlightDeckWidget.entitlements */,
+				35073D6481653FF90168FEEE /* FlightDeckWidgetBundle.swift */,
+				5E8EBA1CB38399FA91045E85 /* Info.plist */,
+				5EB15F0C3CFB6244A90C75E6 /* Widgets.swift */,
+			);
+			path = FlightDeckWidget;
+			sourceTree = "<group>";
+		};
+		024A08F7FDBF78A1CC195148 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				498AE2F5E8330CE5F04BBD52 /* FlightDeck.app */,
+				DA03EEC134A5DE3A797FA51B /* FlightDeckWidget.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		1A9B693C683A2ABF3ABCFA1C /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				E5D882A43E3B20AB965799BB /* WidgetStore.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		A23DF0F93EC3009746D10BC8 /* FlightDeck */ = {
+			isa = PBXGroup;
+			children = (
+				B1E3C9E012CCE9F5C561BF66 /* Assets.xcassets */,
+				91C6CD715B79E10B1EEEA4FB /* ContentView.swift */,
+				B97B75C9245BFD9CEC60A608 /* FlightDeck.entitlements */,
+				6C824400B279C7EB2518A16D /* FlightDeckApp.swift */,
+				B09CBF9EBB0438D0D6973B9E /* Info.plist */,
+			);
+			path = FlightDeck;
+			sourceTree = "<group>";
+		};
+		E361B1ECCB6FED3259660A59 = {
+			isa = PBXGroup;
+			children = (
+				A23DF0F93EC3009746D10BC8 /* FlightDeck */,
+				01D45CE5B66E15115D0F0E42 /* FlightDeckWidget */,
+				1A9B693C683A2ABF3ABCFA1C /* Shared */,
+				024A08F7FDBF78A1CC195148 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		755A7F772B5DFC408EBEBC4F /* FlightDeckWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0F2EF1B80F2E0222A3AE334A /* Build configuration list for PBXNativeTarget "FlightDeckWidget" */;
+			buildPhases = (
+				3EC72138F02BA4A0D896EA2C /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = FlightDeckWidget;
+			packageProductDependencies = (
+			);
+			productName = FlightDeckWidget;
+			productReference = DA03EEC134A5DE3A797FA51B /* FlightDeckWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		D88D02D58877FFFE0438D558 /* FlightDeck */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CBF63B98ADEDAAD1D9FA03BD /* Build configuration list for PBXNativeTarget "FlightDeck" */;
+			buildPhases = (
+				B2CCAEF34B6226B8D872AE72 /* Sources */,
+				3AFEA837714BBD69C0EA7822 /* Resources */,
+				2D5E5FFECEE8442245352288 /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				49DD0E69934CE2D09E0C45DA /* PBXTargetDependency */,
+			);
+			name = FlightDeck;
+			packageProductDependencies = (
+			);
+			productName = FlightDeck;
+			productReference = 498AE2F5E8330CE5F04BBD52 /* FlightDeck.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		42B5C3DBE8F2D12AC89C6C42 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					755A7F772B5DFC408EBEBC4F = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+					D88D02D58877FFFE0438D558 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = F81C75EDD4A063273044FAD4 /* Build configuration list for PBXProject "FlightDeck" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = E361B1ECCB6FED3259660A59;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				D88D02D58877FFFE0438D558 /* FlightDeck */,
+				755A7F772B5DFC408EBEBC4F /* FlightDeckWidget */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		3AFEA837714BBD69C0EA7822 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				DDF1D8067E19D033D28E68E3 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		3EC72138F02BA4A0D896EA2C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7D7573450E616701B46A0075 /* FlightDeckWidgetBundle.swift in Sources */,
+				F3BD8A4635E82370075650F9 /* WidgetStore.swift in Sources */,
+				5B2B3433902F6AEBBCFE54B2 /* Widgets.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B2CCAEF34B6226B8D872AE72 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B73C9524D91591AFF27CBE0B /* ContentView.swift in Sources */,
+				5E828258151062E07895C744 /* FlightDeckApp.swift in Sources */,
+				87F6327979A2DF758EE7C003 /* WidgetStore.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		49DD0E69934CE2D09E0C45DA /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 755A7F772B5DFC408EBEBC4F /* FlightDeckWidget */;
+			targetProxy = 8335B5841833AD39A47DF6C3 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		2CCA71B43C21BC74DA2A84CB /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		689900B862C98425687837BC /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		748DA989A20156CAF7C8839D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = FlightDeck/FlightDeck.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = FlightDeck/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = app.flightdeck.crew;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		865519F7B41F394ADEC5393D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = FlightDeckWidget/FlightDeckWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = FlightDeckWidget/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
+				PRODUCT_BUNDLE_IDENTIFIER = app.flightdeck.crew.widget;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		8743A555621FDC5FC6607AC7 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = FlightDeckWidget/FlightDeckWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = FlightDeckWidget/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
+				PRODUCT_BUNDLE_IDENTIFIER = app.flightdeck.crew.widget;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		8BDA4E5B1E1A1AC5C7C072FE /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = FlightDeck/FlightDeck.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = FlightDeck/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = app.flightdeck.crew;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		0F2EF1B80F2E0222A3AE334A /* Build configuration list for PBXNativeTarget "FlightDeckWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8743A555621FDC5FC6607AC7 /* Debug */,
+				865519F7B41F394ADEC5393D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		CBF63B98ADEDAAD1D9FA03BD /* Build configuration list for PBXNativeTarget "FlightDeck" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				748DA989A20156CAF7C8839D /* Debug */,
+				8BDA4E5B1E1A1AC5C7C072FE /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		F81C75EDD4A063273044FAD4 /* Build configuration list for PBXProject "FlightDeck" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				689900B862C98425687837BC /* Debug */,
+				2CCA71B43C21BC74DA2A84CB /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 42B5C3DBE8F2D12AC89C6C42 /* Project object */;
+}

@@ -8,6 +8,7 @@ import {
   delayNotice,
   showLocalNotification,
 } from "@/lib/notifications";
+import { pushWidgetSnapshot, startWidgetSync } from "@/lib/widget-bridge";
 import { flightsOnDate, isFlightDuty } from "@/lib/shift";
 import { todayKey } from "@/lib/dates";
 import { toFlightIata } from "@/lib/airports";
@@ -17,6 +18,8 @@ import type { LiveFlight } from "@/lib/types";
 export function OpsRuntime() {
   const { duties, profile, liveByIata } = useRoster();
   const delayPrev = useRef<Record<string, number | null>>({});
+  const dutiesRef = useRef(duties);
+  dutiesRef.current = duties;
 
   useEffect(() => {
     if (!profile.notificationsEnabled) return;
@@ -41,6 +44,12 @@ export function OpsRuntime() {
       if (notice) void showLocalNotification(notice);
     }
   }, [duties, liveByIata, profile.notificationsEnabled]);
+
+  // Push roster snapshot to iOS WidgetKit (no-op in Safari / desktop)
+  useEffect(() => {
+    pushWidgetSnapshot(duties);
+    return startWidgetSync(() => dutiesRef.current);
+  }, [duties, profile.lastSyncedAt]);
 
   return null;
 }

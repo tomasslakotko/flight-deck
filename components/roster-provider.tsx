@@ -13,7 +13,7 @@ import { toast } from "sonner";
 import { db } from "@/lib/db";
 import { tryStorage } from "@/lib/idb";
 import { downloadIcs } from "@/lib/fetch-ics";
-import { buildDemoDuties, buildDemoPassengers, buildDemoProfile } from "@/lib/demo-data";
+import { buildDemoProfile } from "@/lib/demo-data";
 import { todayKey } from "@/lib/dates";
 import { toFlightIata } from "@/lib/airports";
 import { enrichDutyRoutes, flightsOnDate } from "@/lib/shift";
@@ -51,7 +51,6 @@ type RosterContextValue = {
   replacePassengers: (flightDutyId: string, rows: Passenger[]) => Promise<void>;
   savePassenger: (row: Passenger) => Promise<void>;
   updateProfile: (patch: Partial<CrewProfile>) => Promise<void>;
-  resetDemo: () => Promise<void>;
   clearPastDuties: () => Promise<number>;
   clearRoster: () => Promise<void>;
   markSynced: () => Promise<void>;
@@ -60,13 +59,21 @@ type RosterContextValue = {
 
 const RosterContext = createContext<RosterContextValue | null>(null);
 
-function memoryDemo(): Snapshot {
-  const duties = enrichDutyRoutes(buildDemoDuties());
+function emptySnapshot(): Snapshot {
   return {
-    duties,
-    passengers: buildDemoPassengers(duties),
+    duties: [],
+    passengers: [],
     profile: buildDemoProfile(),
   };
+}
+
+function withoutDemo(duties: Duty[]) {
+  return duties.filter((d) => d.source !== "demo");
+}
+
+function passengersForDuties(passengers: Passenger[], duties: Duty[]) {
+  const ids = new Set(duties.map((d) => d.id));
+  return passengers.filter((p) => ids.has(p.flightDutyId));
 }
 
 function sortDuties(duties: Duty[]) {
@@ -74,7 +81,7 @@ function sortDuties(duties: Duty[]) {
 }
 
 function normalizeDuties(duties: Duty[]) {
-  return enrichDutyRoutes(dedupeFlightDuties(sortDuties(duties)));
+  return enrichDutyRoutes(dedupeFlightDuties(sortDuties(withoutDemo(duties))));
 }
 
 function mergeDutyLists(prev: Duty[], incoming: Duty[], mode: "merge" | "replace") {
@@ -156,10 +163,10 @@ async function persistSession(stamp: SessionStamp) {
 }
 
 export function RosterProvider({ children }: { children: React.ReactNode }) {
-  const demo = useMemo(() => memoryDemo(), []);
+  const empty = useMemo(() => emptySnapshot(), []);
   const dirty = useRef(false);
-  const dutiesRef = useRef<Duty[]>(demo.duties);
-  const profileRef = useRef<CrewProfile>(demo.profile);
+  const dutiesRef = useRef<Duty[]>([]);
+  const profileRef = useRef<CrewProfile>(empty.profile);
   const sessionRef = useRef<SessionStamp | null>(null);
   const liveRef = useRef<Record<string, LiveFlight>>({});
   const bootstrapping = useRef(false);
@@ -168,9 +175,9 @@ export function RosterProvider({ children }: { children: React.ReactNode }) {
   const [sessionLoading, setSessionLoading] = useState(true);
   const [online, setOnline] = useState(true);
   const [syncError, setSyncError] = useState<string | null>(null);
-  const [duties, setDuties] = useState<Duty[]>(demo.duties);
-  const [passengers, setPassengers] = useState<Passenger[]>(demo.passengers);
-  const [profile, setProfile] = useState<CrewProfile>(demo.profile);
+  const [duties, setDuties] = useState<Duty[]>([]);
+  const [passengers, setPassengers] = useState<Passenger[]>([]);
+  const [profile, setProfile] = useState<CrewProfile>(empty.profile);
   const [liveByIata, setLiveByIata] = useState<Record<string, LiveFlight>>({});
   const [session, setSession] = useState<SessionStamp | null>(null);
 
@@ -206,23 +213,31 @@ export function RosterProvider({ children }: { children: React.ReactNode }) {
       const seeded = await tryStorage(() => db.flags.get("seeded"));
       if (cancelled) return;
       if (!seeded?.value) {
-        const fresh = memoryDemo();
+        const fresh = emptySnapshot();
         await tryStorage(async () => {
-          await db.duties.bulkPut(fresh.duties);
-          await db.passengers.bulkPut(fresh.passengers);
           await db.profile.put(fresh.profile);
           await db.flags.put({ key: "seeded", value: true });
         });
+        if (!cancelled && !dirty.current) apply(fresh);
       } else {
         const stored = await tryStorage(() => readStore());
-        if (!cancelled && stored && !dirty.current && stored.duties.length) {
-          const cleaned = normalizeDuties(stored.duties);
-          apply({ ...stored, duties: cleaned });
-          if (cleaned.length !== stored.duties.length) {
+        if (!cancelled && stored && !dirty.current) {
+          const cleanedDuties = normalizeDuties(stored.duties);
+          const cleanedPassengers = passengersForDuties(stored.passengers, cleanedDuties);
+          apply({
+            duties: cleanedDuties,
+            passengers: cleanedPassengers,
+            profile: stored.profile,
+          });
+          const droppedDemo = stored.duties.length !== cleanedDuties.length;
+          const droppedPax = stored.passengers.length !== cleanedPassengers.length;
+          if (droppedDemo || droppedPax || cleanedDuties.length !== stored.duties.length) {
             await tryStorage(async () => {
-              await db.transaction("rw", db.duties, async () => {
+              await db.transaction("rw", db.duties, db.passengers, async () => {
                 await db.duties.clear();
-                if (cleaned.length) await db.duties.bulkPut(cleaned);
+                await db.passengers.clear();
+                if (cleanedDuties.length) await db.duties.bulkPut(cleanedDuties);
+                if (cleanedPassengers.length) await db.passengers.bulkPut(cleanedPassengers);
               });
             });
           }
@@ -487,26 +502,6 @@ export function RosterProvider({ children }: { children: React.ReactNode }) {
     };
   }, [hydrated, refreshSession]);
 
-  const resetDemo = useCallback(async () => {
-    markDirty();
-    const fresh = memoryDemo();
-    apply(fresh);
-    dutiesRef.current = fresh.duties;
-    profileRef.current = fresh.profile;
-    setLiveByIata({});
-    setSession(null);
-    setSyncError(null);
-    void tryStorage(async () => {
-      await db.duties.clear();
-      await db.passengers.clear();
-      await db.liveFlights.clear();
-      await db.duties.bulkPut(fresh.duties);
-      await db.passengers.bulkPut(fresh.passengers);
-      await db.profile.put(fresh.profile);
-      await db.flags.delete("session");
-    });
-  }, [apply, markDirty]);
-
   const clearPastDuties = useCallback(async () => {
     markDirty();
     const today = todayKey();
@@ -560,7 +555,6 @@ export function RosterProvider({ children }: { children: React.ReactNode }) {
       replacePassengers,
       savePassenger,
       updateProfile,
-      resetDemo,
       clearPastDuties,
       clearRoster,
       markSynced,
@@ -582,7 +576,6 @@ export function RosterProvider({ children }: { children: React.ReactNode }) {
       replacePassengers,
       savePassenger,
       updateProfile,
-      resetDemo,
       clearPastDuties,
       clearRoster,
       markSynced,

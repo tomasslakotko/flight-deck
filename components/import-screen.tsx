@@ -21,7 +21,7 @@ import { todayKey } from "@/lib/dates";
 import type { Duty, DutyType } from "@/lib/types";
 
 export function ImportScreen() {
-  const { importDuties, upsertDuty, updateProfile, profile, resetDemo, clearPastDuties, clearRoster, markSynced, refreshSession, duties } = useRoster();
+  const { importDuties, upsertDuty, updateProfile, profile, clearPastDuties, clearRoster, markSynced, refreshSession, duties } = useRoster();
   const [url, setUrl] = useState(profile.icalUrl ?? "");
   const [replace, setReplace] = useState(false);
   const [notifBusy, setNotifBusy] = useState(false);
@@ -293,10 +293,6 @@ export function ImportScreen() {
             </Button>
           </div>
         </section>
-
-        <Button variant="outline" className="h-11 rounded-full" onClick={() => void resetDemo()}>
-          Restore demo week
-        </Button>
       </div>
     </AppShell>
   );
@@ -305,9 +301,9 @@ export function ImportScreen() {
 function ManualForm({ onSave }: { onSave: (duty: Duty) => Promise<void> }) {
   const [type, setType] = useState<DutyType>("flight");
   const [date, setDate] = useState(todayKey());
-  const [flight, setFlight] = useState("BT");
-  const [dep, setDep] = useState("RIX");
-  const [arr, setArr] = useState("CPH");
+  const [flight, setFlight] = useState("");
+  const [dep, setDep] = useState("");
+  const [arr, setArr] = useState("");
   const [std, setStd] = useState("11:15");
   const [sta, setSta] = useState("12:45");
   const [notes, setNotes] = useState("");
