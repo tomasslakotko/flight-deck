@@ -8,6 +8,7 @@ import { AIRPORT_NOTES, airportTz, flightRouteLabel } from "@/lib/airports";
 import { formatClock, formatLongDate, formatShortDate, minutesUntil, todayKey } from "@/lib/dates";
 import { useLiveFlight } from "@/hooks/use-live-flight";
 import {
+  checkInIso,
   flightsOnDate,
   nextDuty,
   nextPairingAfter,
@@ -26,7 +27,9 @@ export function ShiftScreen() {
   const bounds = shiftBounds(duties, today);
   const next = nextDuty(duties);
   const nextPair = nextPairingAfter(duties, bounds?.end) ?? null;
-  const mins = minutesUntil(bounds?.start ?? flights[0]?.checkIn ?? flights[0]?.std ?? next?.std);
+  const mins = minutesUntil(
+    bounds?.start ?? (flights[0] ? checkInIso(flights[0]) : undefined) ?? next?.std,
+  );
   const phase = flights.length ? phaseForShift(flights) : "pre";
   const phases = flights.length ? phaseSchedule(flights) : [];
 
@@ -133,7 +136,7 @@ export function ShiftScreen() {
 function NextDutyCard({ pairing, today }: { pairing: Duty[]; today: string }) {
   const first = pairing[0];
   const last = pairing[pairing.length - 1];
-  const report = first.checkIn || first.std;
+  const report = checkInIso(first) || first.std;
   const otherDay = first.date !== today;
   const routes = pairing.map((f) => flightRouteLabel(f)).join(" · ");
   const numbers = pairing

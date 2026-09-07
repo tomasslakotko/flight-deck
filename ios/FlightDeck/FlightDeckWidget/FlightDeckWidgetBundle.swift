@@ -6,5 +6,7 @@ struct FlightDeckWidgetBundle: WidgetBundle {
   var body: some Widget {
     NextDutyWidget()
     TodayFlightsWidget()
+    DayTimelineWidget()
+    LockScreenDutyWidget()
   }
 }

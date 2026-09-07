@@ -1,6 +1,6 @@
 # Flight Deck — iPhone
 
-Native iOS shell (SwiftUI + WKWebView) that opens the live web app, plus **Home Screen widgets**.
+Native iOS shell (SwiftUI + WKWebView) that opens the live web app, plus **Home Screen** and **Lock Screen** widgets.
 
 ## Open in Xcode
 
@@ -18,12 +18,31 @@ The app loads: https://er324322ertd.vercel.app
 
 ## Widgets
 
-After installing the app:
+### Home Screen
 
-1. Long-press Home Screen → **+** → search **Flight Deck**
-2. Add **Next duty** and/or **Today’s flights**
+| Widget | Look |
+|--------|------|
+| **Duty pulse** | Dark atmospheric card with countdown + route progress (check-in / class / check-out) |
+| **Route card** | Light/dark adaptive card with large airport codes |
+| **Full day** | Timeline: Shift start → sectors → Shift end, plus flight number, registration, status |
 
-Widgets update when you open the app (roster is synced from the web app into an App Group).
+Also when relevant: **Standby / Reserve / Day off**, **private note** snippet, **Live … min ago**.
+
+### Lock Screen
+
+| Style | Shows |
+|-------|--------|
+| **Circular** | Progress gauge + countdown (or SBY / RSV / OFF) |
+| **Rectangular** | Flight · countdown · route · gate / note |
+| **Inline** | One-line: `BT101 RIX→CPH · 1H12M` |
+
+**Add Lock Screen widgets:** Lock Screen → customize → add widget → **Flight Deck** → **Lock Screen duty**.
+
+**Add Home Screen widgets:** long-press Home Screen → **+** → **Flight Deck**.
+
+Open the app once with a roster imported so widgets sync.
+
+Widgets refresh when you open the app (roster → App Group → WidgetKit).
 
 ## Local web debugging
 

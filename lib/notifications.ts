@@ -1,7 +1,7 @@
 import type { Duty, LiveFlight } from "@/lib/types";
 import { airportTz, flightRouteLabel } from "@/lib/airports";
 import { formatClock, parseFlightInstant, todayKey } from "@/lib/dates";
-import { flightsOnDate, isFlightDuty } from "@/lib/shift";
+import { checkInInstant, flightsOnDate, isFlightDuty } from "@/lib/shift";
 
 const FIRED_KEY = "bt-crew-notified";
 
@@ -85,11 +85,8 @@ export async function showLocalNotification(notice: Omit<LocalNotice, "at">) {
   }
 }
 
-function checkInInstant(duty: Duty) {
-  if (duty.checkIn) return parseFlightInstant(duty.checkIn);
-  const std = parseFlightInstant(duty.std);
-  if (!std) return null;
-  return new Date(std.getTime() - 60 * 60_000);
+function reportInstant(duty: Duty) {
+  return checkInInstant(duty);
 }
 
 /** Build upcoming local notices for today's (and next) duties. */
@@ -106,7 +103,7 @@ export function buildDutyNotices(duties: Duty[], now = Date.now()): LocalNotice[
     const flights = flightsOnDate(duties, date).filter(isFlightDuty);
     if (!flights.length) continue;
     const first = flights[0];
-    const report = checkInInstant(first);
+    const report = reportInstant(first);
     if (report) {
       const lead = report.getTime() - 15 * 60_000;
       const route = flightRouteLabel(first);

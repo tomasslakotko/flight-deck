@@ -233,6 +233,21 @@ export function dutiesOnDate(duties: Duty[], date: string) {
 
 export const CHECK_OUT_AFTER_STA_MIN = 30;
 
+/** Crew check-in is fixed vs scheduled STD — delays / ETD never move it. */
+export const CHECK_IN_BEFORE_STD_MIN = 70;
+
+/** Report time: roster check-in if present, else STD − 1h10. Never uses live ETD. */
+export function checkInInstant(duty: Duty) {
+  if (duty.checkIn) return instant(duty.checkIn);
+  const std = instant(duty.std);
+  if (!std) return null;
+  return new Date(std.getTime() - CHECK_IN_BEFORE_STD_MIN * 60_000);
+}
+
+export function checkInIso(duty: Duty) {
+  return checkInInstant(duty)?.toISOString() ?? undefined;
+}
+
 export function checkOutInstant(duty: Duty) {
   const land = arrivalInstant(duty);
   if (!land) return null;
@@ -245,7 +260,7 @@ export function shiftBounds(duties: Duty[], date: string) {
   if (!day.length) return null;
   const first = flights[0] ?? day[0];
   const last = flights[flights.length - 1] ?? day[day.length - 1];
-  const start = first.checkIn || first.std;
+  const start = checkInIso(first) || first.std;
   const end = checkOutInstant(last)?.toISOString() || last.sta || last.std;
   return { start, end, duties: day };
 }
@@ -284,7 +299,7 @@ export function phaseForShift(flights: Duty[], now = new Date()): FlightPhase {
   if (!sorted.length) return "pre";
   const first = sorted[0];
   const last = sorted[sorted.length - 1];
-  const report = first.checkIn || first.std;
+  const report = checkInIso(first) || first.std;
   const toReport = minutesUntil(report, now);
   const toLastSta = minutesUntil(last.sta || last.std, now) ?? 0;
   if (toReport != null && toReport > 60) return "pre";
@@ -319,7 +334,7 @@ export function phaseSchedule(dutyOrFlights: Duty | Duty[]) {
   const focusSta = arrivalInstant(focus) ?? (focusStd ? new Date(focusStd.getTime() + 90 * 60_000) : null);
   const lastSta = arrivalInstant(last) ?? focusSta;
   if (!firstStd || !focusStd || !focusSta || !lastSta) return [];
-  const report = first.checkIn ? instant(first.checkIn) : new Date(firstStd.getTime() - 60 * 60_000);
+  const report = checkInInstant(first) ?? new Date(firstStd.getTime() - CHECK_IN_BEFORE_STD_MIN * 60_000);
   const depTz = airportTz(first.depIata);
   const focusDepTz = airportTz(focus.depIata);
   const focusArrTz = airportTz(focus.arrIata);
@@ -331,7 +346,7 @@ export function phaseSchedule(dutyOrFlights: Duty | Duty[]) {
   });
   const at = (base: Date, min: number) => new Date(base.getTime() + min * 60_000);
   return [
-    mk("Check in", report ?? at(firstStd, -60), "preparation", depTz),
+    mk("Check in", report ?? at(firstStd, -CHECK_IN_BEFORE_STD_MIN), "preparation", depTz),
     mk("Boarding", at(focusStd, -30), "boarding", focusDepTz),
     mk("Service", at(focusStd, 20), "service", focusDepTz),
     mk("Landing prep", at(focusSta, -30), "landing", focusArrTz),
@@ -353,7 +368,7 @@ export function nextPairingAfter(duties: Duty[], afterIso?: string | null) {
   for (const group of flightPairings(duties)) {
     const first = group[0];
     if (!first) continue;
-    const start = instant(first.checkIn || first.std)?.getTime() ?? 0;
+    const start = checkInInstant(first)?.getTime() ?? instant(first.std)?.getTime() ?? 0;
     if (start > after) return group;
   }
   return null;

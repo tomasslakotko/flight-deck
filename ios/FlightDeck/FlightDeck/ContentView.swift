@@ -100,15 +100,49 @@ struct WebView: UIViewRepresentable {
             (json["type"] as? String) == "widget"
       else { return }
 
+      let segments: [WidgetDaySegment]? = {
+        guard let raw = json["segments"] as? [[String: Any]] else { return nil }
+        return raw.map { item in
+          WidgetDaySegment(
+            kind: (item["kind"] as? String) ?? "flight",
+            label: (item["label"] as? String) ?? "—",
+            flightNumber: item["flightNumber"] as? String,
+            registration: item["registration"] as? String,
+            aircraftType: item["aircraftType"] as? String,
+            gate: item["gate"] as? String,
+            status: item["status"] as? String,
+            delayed: item["delayed"] as? Bool,
+            startTime: item["startTime"] as? String,
+            endTime: item["endTime"] as? String
+          )
+        }
+      }()
+
       let snapshot = WidgetSnapshot(
         updatedAt: (json["updatedAt"] as? Double) ?? Date().timeIntervalSince1970,
         headline: (json["headline"] as? String) ?? "Flight Deck",
         detail: (json["detail"] as? String) ?? "",
         reportAt: json["reportAt"] as? Double,
+        checkoutAt: json["checkoutAt"] as? Double,
         route: json["route"] as? String,
         flightNumber: json["flightNumber"] as? String,
         flightCount: (json["flightCount"] as? Int) ?? 0,
-        empty: (json["empty"] as? Bool) ?? true
+        empty: (json["empty"] as? Bool) ?? true,
+        dayKind: json["dayKind"] as? String,
+        noteSnippet: json["noteSnippet"] as? String,
+        liveUpdatedAt: json["liveUpdatedAt"] as? Double,
+        depIata: json["depIata"] as? String,
+        arrIata: json["arrIata"] as? String,
+        depTime: json["depTime"] as? String,
+        arrTime: json["arrTime"] as? String,
+        checkInTime: json["checkInTime"] as? String,
+        checkOutTime: json["checkOutTime"] as? String,
+        cabinClass: json["cabinClass"] as? String,
+        statusLabel: json["statusLabel"] as? String,
+        countdown: json["countdown"] as? String,
+        progress: json["progress"] as? Double,
+        via: json["via"] as? [String],
+        segments: segments
       )
       WidgetStore.save(snapshot)
       WidgetCenter.shared.reloadAllTimelines()

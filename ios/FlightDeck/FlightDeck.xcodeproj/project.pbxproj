@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 63;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -43,7 +43,7 @@
 
 /* Begin PBXFileReference section */
 		35073D6481653FF90168FEEE /* FlightDeckWidgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlightDeckWidgetBundle.swift; sourceTree = "<group>"; };
-		498AE2F5E8330CE5F04BBD52 /* FlightDeck.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = FlightDeck.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		498AE2F5E8330CE5F04BBD52 /* FlightDeck.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FlightDeck.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		4CB44F7ED3E105CB4AC0BD9A /* FlightDeckWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = FlightDeckWidget.entitlements; sourceTree = "<group>"; };
 		5E8EBA1CB38399FA91045E85 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		5EB15F0C3CFB6244A90C75E6 /* Widgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Widgets.swift; sourceTree = "<group>"; };
@@ -52,7 +52,7 @@
 		B09CBF9EBB0438D0D6973B9E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		B1E3C9E012CCE9F5C561BF66 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B97B75C9245BFD9CEC60A608 /* FlightDeck.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = FlightDeck.entitlements; sourceTree = "<group>"; };
-		DA03EEC134A5DE3A797FA51B /* FlightDeckWidget.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = FlightDeckWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		DA03EEC134A5DE3A797FA51B /* FlightDeckWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = FlightDeckWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		E5D882A43E3B20AB965799BB /* WidgetStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetStore.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -157,11 +157,9 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					755A7F772B5DFC408EBEBC4F = {
-						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
 					};
 					D88D02D58877FFFE0438D558 = {
-						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -176,7 +174,6 @@
 			);
 			mainGroup = E361B1ECCB6FED3259660A59;
 			minimizedProjectReferenceProxies = 1;
-			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -362,7 +359,7 @@
 				CODE_SIGN_ENTITLEMENTS = FlightDeck/FlightDeck.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 5FRH6MY4DD;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = FlightDeck/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -381,10 +378,14 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = FlightDeckWidget/FlightDeckWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 5FRH6MY4DD;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = FlightDeckWidget/Info.plist;
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = app.flightdeck.crew.widget;
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
@@ -397,10 +398,14 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = FlightDeckWidget/FlightDeckWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 5FRH6MY4DD;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = FlightDeckWidget/Info.plist;
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = app.flightdeck.crew.widget;
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
@@ -416,7 +421,7 @@
 				CODE_SIGN_ENTITLEMENTS = FlightDeck/FlightDeck.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 5FRH6MY4DD;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = FlightDeck/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (

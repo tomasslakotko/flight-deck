@@ -19,7 +19,11 @@ export function OpsRuntime() {
   const { duties, profile, liveByIata } = useRoster();
   const delayPrev = useRef<Record<string, number | null>>({});
   const dutiesRef = useRef(duties);
+  const liveRef = useRef(liveByIata);
+  const positionRef = useRef(profile.position);
   dutiesRef.current = duties;
+  liveRef.current = liveByIata;
+  positionRef.current = profile.position;
 
   useEffect(() => {
     if (!profile.notificationsEnabled) return;
@@ -45,11 +49,15 @@ export function OpsRuntime() {
     }
   }, [duties, liveByIata, profile.notificationsEnabled]);
 
-  // Push roster snapshot to iOS WidgetKit (no-op in Safari / desktop)
+  // Push roster + live status to iOS WidgetKit (no-op in Safari / desktop)
   useEffect(() => {
-    pushWidgetSnapshot(duties);
-    return startWidgetSync(() => dutiesRef.current);
-  }, [duties, profile.lastSyncedAt]);
+    const opts = () => ({
+      position: positionRef.current,
+      liveByIata: liveRef.current,
+    });
+    pushWidgetSnapshot(duties, opts());
+    return startWidgetSync(() => dutiesRef.current, opts);
+  }, [duties, liveByIata, profile.lastSyncedAt, profile.position]);
 
   return null;
 }
