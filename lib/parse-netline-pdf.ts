@@ -16,7 +16,12 @@ const FLIGHT_RE =
   /\b(?:DH\/)?([A-Z]{2})\s+(\d{2,4})\s+(?:R\s+)?([A-Z]{3})\s+(\d{3,4})\s+(\d{3,4})\s+([A-Z]{3})\b/gi;
 const CHECKIN_RE = /\bC\/I\s+([A-Z]{3})\s+(\d{3,4})\b/gi;
 const DAYOFF_RE = /\bDAYOFF\b/i;
-const SBY_RE = /\b(SBY[A-Z0-9-]*)\s+([A-Z]{3})\s+(\d{3,4})\s+(\d{3,4})\b/gi;
+/** SBYA BEG 0400 2200 · HSBY RIX 0500 2300 · H/SBY AMS … */
+const SBY_TOKEN = "(?:H\\/SBY|HSBY|ASBY|SBY[A-Z0-9-]*|STANDBY)";
+const SBY_FULL_RE = new RegExp(`\\b(${SBY_TOKEN})\\s+([A-Z]{3})\\s+(\\d{3,4})\\s+(\\d{3,4})\\b`, "gi");
+/** SBY BEG / STANDBY RIX */
+const SBY_PLACE_RE = new RegExp(`\\b(${SBY_TOKEN})\\s+([A-Z]{3})\\b`, "gi");
+const SBY_ANY_RE = new RegExp(`\\b(${SBY_TOKEN})\\b`, "gi");
 
 function shortHash(seed: string) {
   let h = 2166136261;
@@ -139,6 +144,88 @@ function byKeyOrNear(map: Map<string, Duty>, key: string, duty: Duty) {
   return undefined;
 }
 
+function countSbyHits(slice: string) {
+  return [...slice.matchAll(new RegExp(SBY_ANY_RE.source, "gi"))].length;
+}
+
+function normalizeSbyTitle(raw: string) {
+  const t = raw.toUpperCase();
+  if (t === "STANDBY") return "SBY";
+  return t;
+}
+
+function parseStandbyFromSlice(
+  slice: string,
+  day: Date,
+  date: string,
+  source: Duty["source"],
+): Duty[] {
+  const out: Duty[] = [];
+  const seen = new Set<string>();
+
+  for (const sby of slice.matchAll(new RegExp(SBY_FULL_RE.source, "gi"))) {
+    const title = normalizeSbyTitle(sby[1]);
+    const dep = sby[2].toUpperCase();
+    const std = hhmmOnDate(padTime(sby[3]), day, NETLINE_TZ);
+    let sta = hhmmOnDate(padTime(sby[4]), day, NETLINE_TZ);
+    if (std && sta && Date.parse(sta) <= Date.parse(std)) {
+      const next = new Date(day);
+      next.setDate(next.getDate() + 1);
+      sta = hhmmOnDate(padTime(sby[4]), next, NETLINE_TZ);
+    }
+    const key = `${date}|${title}|${dep}|${sby[3]}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      id: uid(`${date}-${title}-${sby[3]}`),
+      uid: uid(`${date}-${title}-${sby[3]}`),
+      date,
+      type: "standby",
+      title,
+      depIata: dep,
+      std,
+      sta,
+      source,
+    });
+  }
+
+  if (out.length) return out;
+
+  for (const sby of slice.matchAll(new RegExp(SBY_PLACE_RE.source, "gi"))) {
+    const title = normalizeSbyTitle(sby[1]);
+    const dep = sby[2].toUpperCase();
+    const key = `${date}|${title}|${dep}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      id: uid(`${date}-${title}-${dep}`),
+      uid: uid(`${date}-${title}-${dep}`),
+      date,
+      type: "standby",
+      title,
+      depIata: dep,
+      source,
+    });
+  }
+
+  if (out.length) return out;
+
+  const bare = new RegExp(SBY_ANY_RE.source, "gi").exec(slice);
+  if (bare) {
+    const title = normalizeSbyTitle(bare[1]);
+    out.push({
+      id: uid(`${date}-${title}`),
+      uid: uid(`${date}-${title}`),
+      date,
+      type: "standby",
+      title,
+      source,
+    });
+  }
+
+  return out;
+}
+
 /** Parse NetLine-style Individual Duty Plan PDF text. */
 export function parseNetlineIdp(raw: string, source: Duty["source"] = "pdf"): ImportPreview {
   const text = raw.replace(/\s+/g, " ").trim();
@@ -154,8 +241,9 @@ export function parseNetlineIdp(raw: string, source: Duty["source"] = "pdf"): Im
     return { duties: [], unmatched: ["No day columns found in NetLine duty plan"] };
   }
 
-  // Prefer the duty-table slice (most flights), not the long CRM crew strip
+  // Prefer the duty-table slice (most flights / SBY), not the long CRM crew strip
   const bestSlice = new Map<string, { day: Date; slice: string; score: number }>();
+  const allSlices = new Map<string, { day: Date; slices: string[] }>();
   for (let i = 0; i < markers.length; i++) {
     const marker = markers[i];
     const dayNum = Number(marker[2]);
@@ -166,19 +254,26 @@ export function parseNetlineIdp(raw: string, source: Duty["source"] = "pdf"): Im
     const slice = text.slice(startIdx, endIdx);
     if (slice.length < 8) continue;
     const key = dateKey(day);
+    const bucket = allSlices.get(key) ?? { day, slices: [] };
+    bucket.slices.push(slice);
+    allSlices.set(key, bucket);
+
     FLIGHT_RE.lastIndex = 0;
     const flightHits = [...slice.matchAll(new RegExp(FLIGHT_RE.source, "gi"))].length;
     const hasCheckIn = /C\/I\s+[A-Z]{3}/i.test(slice) ? 2 : 0;
-    const score = flightHits * 10 + hasCheckIn + Math.min(slice.length, 40) / 40;
+    const sbyHits = countSbyHits(slice);
+    const score = flightHits * 10 + sbyHits * 12 + hasCheckIn + Math.min(slice.length, 40) / 40;
     const prev = bestSlice.get(key);
     if (!prev || score > prev.score) bestSlice.set(key, { day, slice, score });
   }
 
   for (const { day, slice } of bestSlice.values()) {
     const date = dateKey(day);
+    const standby = parseStandbyFromSlice(slice, day, date, source);
 
     FLIGHT_RE.lastIndex = 0;
-    if (DAYOFF_RE.test(slice) && !new RegExp(FLIGHT_RE.source, "i").test(slice)) {
+    const hasFlight = new RegExp(FLIGHT_RE.source, "i").test(slice);
+    if (DAYOFF_RE.test(slice) && !hasFlight && !standby.length) {
       duties.push({
         id: uid(`${date}-off`),
         uid: uid(`${date}-off`),
@@ -197,31 +292,11 @@ export function parseNetlineIdp(raw: string, source: Duty["source"] = "pdf"): Im
       checkIn = hhmmOnDate(padTime(ci[2]), day, NETLINE_TZ);
     }
 
-    SBY_RE.lastIndex = 0;
-    for (const sby of slice.matchAll(SBY_RE)) {
-      const std = hhmmOnDate(padTime(sby[3]), day, NETLINE_TZ);
-      let sta = hhmmOnDate(padTime(sby[4]), day, NETLINE_TZ);
-      if (std && sta && Date.parse(sta) <= Date.parse(std)) {
-        const next = new Date(day);
-        next.setDate(next.getDate() + 1);
-        sta = hhmmOnDate(padTime(sby[4]), next, NETLINE_TZ);
-      }
-      duties.push({
-        id: uid(`${date}-${sby[1]}-${sby[3]}`),
-        uid: uid(`${date}-${sby[1]}-${sby[3]}`),
-        date,
-        type: "standby",
-        title: sby[1].toUpperCase(),
-        depIata: sby[2],
-        std,
-        sta,
-        source,
-      });
-    }
+    duties.push(...standby);
 
     FLIGHT_RE.lastIndex = 0;
     let firstFlight = true;
-    for (const m of slice.matchAll(FLIGHT_RE)) {
+    for (const m of slice.matchAll(new RegExp(FLIGHT_RE.source, "gi"))) {
       const airline = m[1].toUpperCase();
       const num = m[2];
       const dep = m[3].toUpperCase();
@@ -254,6 +329,19 @@ export function parseNetlineIdp(raw: string, source: Duty["source"] = "pdf"): Im
         source,
       });
       firstFlight = false;
+    }
+  }
+
+  // Catch SBY that lived only in a non-winning slice for that day
+  for (const [date, { day, slices }] of allSlices) {
+    const already = duties.some((d) => d.date === date && d.type === "standby");
+    if (already) continue;
+    for (const slice of slices) {
+      const found = parseStandbyFromSlice(slice, day, date, source);
+      if (found.length) {
+        duties.push(...found);
+        break;
+      }
     }
   }
 

@@ -6,7 +6,6 @@ import { useEffect, useState } from "react";
 import {
   CalendarDays,
   ClipboardList,
-  MoreHorizontal,
   Plane,
   RefreshCw,
   Upload,
@@ -103,7 +102,6 @@ export function AppShell({
           })}
         </nav>
         <ProfileBlock
-          name={profile.name}
           position={profile.position}
           synced={syncedLabel}
           online={online}
@@ -119,15 +117,27 @@ export function AppShell({
               Flight <span className="text-primary">Deck</span>
             </div>
             <div className="text-[11px] text-muted-foreground">
-              {profile.position} · {profile.name}
+              {profile.position}
               {syncedLabel ? ` · Synced ${syncedLabel}` : null}
             </div>
           </div>
-          <Button asChild variant="ghost" size="icon" className="size-11">
-            <Link href="/import">
-              <ClipboardList className="size-5" />
-            </Link>
-          </Button>
+          <div className="flex items-center">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-11"
+              onClick={() => void refreshSession(true)}
+              aria-label="Refresh roster and flights"
+            >
+              <RefreshCw className={cn("size-5", sessionLoading && "animate-spin")} />
+            </Button>
+            <Button asChild variant="ghost" size="icon" className="size-11">
+              <Link href="/import">
+                <ClipboardList className="size-5" />
+              </Link>
+            </Button>
+          </div>
         </header>
 
         {showOfflineBanner ? (
@@ -174,10 +184,10 @@ export function AppShell({
         </main>
 
         <footer className="fixed inset-x-0 bottom-0 z-40 border-t bg-white/90 backdrop-blur-md">
-          <div className="mx-auto flex max-w-6xl items-center gap-3 px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+          <div className="mx-auto flex max-w-6xl items-center gap-3 px-3 pt-1.5 pb-0.5 md:py-2 md:pb-[max(0.5rem,env(safe-area-inset-bottom))]">
             <div className="hidden md:block">
               <MiniProfile
-                name={profile.name}
+                position={profile.position}
                 synced={syncedLabel}
                 online={online}
                 onRefresh={() => void refreshSession(true)}
@@ -190,7 +200,7 @@ export function AppShell({
               shiftEnd={bounds?.end}
             />
           </div>
-          <nav className="flex items-center justify-center gap-2 px-4 pb-[max(0.6rem,env(safe-area-inset-bottom))] md:hidden">
+          <nav className="flex items-center justify-center px-4 pt-0.5 pb-[max(0.6rem,env(safe-area-inset-bottom))] md:hidden">
             <div className="flex h-14 items-center gap-1 rounded-full bg-white px-2 shadow-lg ring-1 ring-black/5">
               {NAV.map((item) => {
                 const active = navActive(item.href);
@@ -209,12 +219,6 @@ export function AppShell({
                 );
               })}
             </div>
-            <Link
-              href="/import"
-              className="flex size-11 items-center justify-center rounded-full bg-white shadow-lg ring-1 ring-black/5"
-            >
-              <MoreHorizontal className="size-5 text-slate-500" />
-            </Link>
           </nav>
         </footer>
       </div>
@@ -223,14 +227,12 @@ export function AppShell({
 }
 
 function ProfileBlock({
-  name,
   position,
   synced,
   online,
   onRefresh,
   refreshing,
 }: {
-  name: string;
   position: string;
   synced: string | null;
   online: boolean;
@@ -239,11 +241,11 @@ function ProfileBlock({
 }) {
   return (
     <div className="flex items-center gap-3 border-t px-4 py-4">
-      <Avatar name={name} online={online} />
+      <Avatar label={position} online={online} />
       <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-semibold">{name}</div>
+        <div className="truncate text-sm font-semibold">{position || "Crew"}</div>
         <div className="text-[11px] text-muted-foreground">
-          {position} · {online ? `Synced ${synced ?? "—"}` : "Offline"}
+          {online ? `Synced ${synced ?? "—"}` : "Offline"}
         </div>
       </div>
       <button
@@ -259,13 +261,13 @@ function ProfileBlock({
 }
 
 function MiniProfile({
-  name,
+  position,
   synced,
   online,
   onRefresh,
   refreshing,
 }: {
-  name: string;
+  position: string;
   synced: string | null;
   online: boolean;
   onRefresh: () => void;
@@ -273,9 +275,9 @@ function MiniProfile({
 }) {
   return (
     <div className="flex items-center gap-2 pr-2">
-      <Avatar name={name} online={online} />
+      <Avatar label={position} online={online} />
       <div>
-        <div className="text-xs font-semibold">{name}</div>
+        <div className="text-xs font-semibold">{position || "Crew"}</div>
         <div className="text-[10px] text-muted-foreground">
           {online ? `Synced ${synced ?? "—"}` : "Offline · cached"}
         </div>
@@ -292,10 +294,10 @@ function MiniProfile({
   );
 }
 
-function Avatar({ name, online }: { name: string; online: boolean }) {
+function Avatar({ label, online }: { label: string; online: boolean }) {
   return (
     <div className="relative flex size-9 items-center justify-center rounded-full bg-sky-100 text-xs font-semibold text-sky-800">
-      {name.slice(0, 1)}
+      {(label || "C").slice(0, 1)}
       <span
         className={cn(
           "absolute right-0 bottom-0 size-2.5 rounded-full ring-2 ring-white",

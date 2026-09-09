@@ -361,9 +361,9 @@ export function nextDuty(duties: Duty[], now = new Date()) {
   return upcoming[0];
 }
 
-/** First flight pairing that starts after the current shift ends (check-out). */
-export function nextPairingAfter(duties: Duty[], afterIso?: string | null) {
-  const after = afterIso ? instant(afterIso)?.getTime() : undefined;
+/** First flight pairing that starts after `afterIso` (or after now if omitted / no today shift). */
+export function nextPairingAfter(duties: Duty[], afterIso?: string | null, now = new Date()) {
+  const after = afterIso ? instant(afterIso)?.getTime() : now.getTime();
   if (after == null) return null;
   for (const group of flightPairings(duties)) {
     const first = group[0];
@@ -372,6 +372,18 @@ export function nextPairingAfter(duties: Duty[], afterIso?: string | null) {
     if (start > after) return group;
   }
   return null;
+}
+
+/** Next standby / reserve that has not ended yet. */
+export function nextStandbyDuty(duties: Duty[], now = new Date()) {
+  const t = now.getTime();
+  return withRoutes(duties)
+    .filter((d) => {
+      if (d.type !== "standby" && d.type !== "reserve") return false;
+      const end = instant(d.sta)?.getTime() ?? instant(d.std)?.getTime();
+      return end != null && end > t;
+    })
+    .sort((a, b) => (a.std ?? "").localeCompare(b.std ?? ""))[0];
 }
 
 /** Prefer live status, but never keep "scheduled" after STA. */

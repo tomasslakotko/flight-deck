@@ -61,6 +61,16 @@ struct WidgetDaySegment: Codable, Hashable {
   var endTime: String?
 }
 
+struct WidgetTomorrowPreview: Codable, Hashable {
+  var kind: String
+  var title: String
+  var detail: String
+  var route: String?
+  var flights: String?
+  var checkInTime: String?
+  var flightCount: Int?
+}
+
 struct WidgetSnapshot: Codable, Hashable {
   var updatedAt: Double
   var headline: String
@@ -74,6 +84,7 @@ struct WidgetSnapshot: Codable, Hashable {
   var dayKind: String?
   var noteSnippet: String?
   var liveUpdatedAt: Double?
+  var tomorrow: WidgetTomorrowPreview?
   var depIata: String?
   var arrIata: String?
   var depTime: String?
@@ -100,6 +111,15 @@ struct WidgetSnapshot: Codable, Hashable {
     dayKind: "flight",
     noteSnippet: "call OPS",
     liveUpdatedAt: Date().timeIntervalSince1970 - 120,
+    tomorrow: WidgetTomorrowPreview(
+      kind: "flight",
+      title: "Tomorrow",
+      detail: "JU430 / JU431 · BEG→IST→BEG · CI 05:50 · 2 sectors",
+      route: "BEG→IST→BEG",
+      flights: "JU430 / JU431",
+      checkInTime: "05:50",
+      flightCount: 2
+    ),
     depIata: "BEG",
     arrIata: "OSL",
     depTime: "18:01",
@@ -129,9 +149,10 @@ struct WidgetSnapshot: Codable, Hashable {
     flightNumber: nil,
     flightCount: 0,
     empty: true,
-    dayKind: "empty",
+    dayKind: "off",
     noteSnippet: nil,
     liveUpdatedAt: nil,
+    tomorrow: nil,
     depIata: nil,
     arrIata: nil,
     depTime: nil,

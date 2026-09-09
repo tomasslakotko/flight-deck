@@ -25,6 +25,8 @@ export function ImportScreen() {
   const [url, setUrl] = useState(profile.icalUrl ?? "");
   const [replace, setReplace] = useState(false);
   const [notifBusy, setNotifBusy] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
+  const [clearing, setClearing] = useState(false);
 
   useEffect(() => {
     if (profile.icalUrl) setUrl(profile.icalUrl);
@@ -40,13 +42,20 @@ export function ImportScreen() {
     setNotifBusy(true);
     try {
       if (!on) {
+        const { syncNativeNotifications } = await import("@/lib/notifications");
+        syncNativeNotifications([], false);
         await updateProfile({ notificationsEnabled: false });
         toast.message("Notifications off");
         return;
       }
-      const { requestNotificationPermission, notificationSupported } = await import(
-        "@/lib/notifications"
-      );
+      const {
+        requestNotificationPermission,
+        notificationSupported,
+        hasNativeNotifications,
+      } = await import("@/lib/notifications").then(async (m) => ({
+        ...m,
+        hasNativeNotifications: (await import("@/lib/widget-bridge")).hasNativeBridge(),
+      }));
       if (!notificationSupported()) {
         toast.error("Notifications are not supported in this browser");
         return;
@@ -58,7 +67,11 @@ export function ImportScreen() {
         return;
       }
       await updateProfile({ notificationsEnabled: true });
-      toast.success("Alerts on for check-in, boarding, and delays");
+      toast.success(
+        hasNativeNotifications
+          ? "iOS alerts on for check-in, boarding, and delays"
+          : "Alerts on for check-in, boarding, and delays",
+      );
     } finally {
       setNotifBusy(false);
     }
@@ -75,7 +88,7 @@ export function ImportScreen() {
       setFileStatus({ kind: "error", message: msg });
       return false;
     }
-    await importDuties(duties, mode ?? (replace ? "replace" : "merge"));
+    await importDuties(duties, mode ?? (replace ? "replace" : "merge"), { resumeAutoSync: true });
     await markSynced();
     setUnmatched(leftover);
     const msg = `Imported ${duties.length} duties${leftover.length ? ` · ${leftover.length} unmatched lines` : ""}`;
@@ -188,8 +201,8 @@ export function ImportScreen() {
         <section className="rounded-2xl bg-white p-4 ring-1 ring-black/5">
           <h2 className="font-semibold">Local notifications</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Check-in (−15 min / at report), boarding (−30 min STD), and delay alerts while this device is
-            awake. Works best as an installed PWA.
+            Check-in (−15 min / at report), boarding (−30 min STD), and delay alerts. On the iPhone
+            app these are native local notifications and can fire after you leave the app.
           </p>
           <Button
             className="mt-3 h-11 w-full rounded-full"
@@ -261,37 +274,72 @@ export function ImportScreen() {
           <p className="mt-1 text-sm text-muted-foreground">
             {duties.length} duties stored on this device. Profile and iCal link are kept.
           </p>
-          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-            <Button
-              variant="outline"
-              className="h-11 flex-1 rounded-full"
-              disabled={busy || !duties.some((d) => d.date < todayKey())}
-              onClick={() => {
-                void (async () => {
-                  const n = await clearPastDuties();
-                  toast.success(n ? `Deleted ${n} past duties` : "No past duties to delete");
-                })();
-              }}
-            >
-              Delete past duties
-            </Button>
-            <Button
-              variant="outline"
-              className="h-11 flex-1 rounded-full text-red-700 hover:bg-red-50 hover:text-red-800"
-              disabled={busy || !duties.length}
-              onClick={() => {
-                if (!window.confirm("Clear the entire roster on this device? Passengers and live cache go too.")) {
-                  return;
-                }
-                void (async () => {
-                  await clearRoster();
-                  toast.success("Roster cleared");
-                })();
-              }}
-            >
-              Clear entire roster
-            </Button>
-          </div>
+          {confirmClear ? (
+            <div className="mt-3 space-y-3 rounded-2xl bg-red-50 p-3 ring-1 ring-red-100">
+              <p className="text-sm text-red-900">
+                Clear all duties, passengers, and live cache on this phone? Auto iCal sync pauses until
+                you import again.
+              </p>
+              <div className="flex flex-col gap-2">
+                <Button
+                  className="h-12 w-full rounded-full bg-red-600 text-white hover:bg-red-700"
+                  disabled={clearing || busy}
+                  onClick={() => {
+                    void (async () => {
+                      setClearing(true);
+                      try {
+                        const ok = await clearRoster();
+                        setConfirmClear(false);
+                        if (ok) {
+                          toast.success("Roster cleared");
+                        } else {
+                          toast.message("Roster cleared in app", {
+                            description: "Storage was slow — if duties return after reload, clear again.",
+                          });
+                        }
+                      } finally {
+                        setClearing(false);
+                      }
+                    })();
+                  }}
+                >
+                  {clearing ? "Clearing…" : "Yes, clear roster"}
+                </Button>
+                <Button
+                  variant="outline"
+                  className="h-12 w-full rounded-full"
+                  disabled={clearing}
+                  onClick={() => setConfirmClear(false)}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+              <Button
+                variant="outline"
+                className="h-12 flex-1 rounded-full"
+                disabled={busy || clearing || !duties.some((d) => d.date < todayKey())}
+                onClick={() => {
+                  void (async () => {
+                    const n = await clearPastDuties();
+                    toast.success(n ? `Deleted ${n} past duties` : "No past duties to delete");
+                  })();
+                }}
+              >
+                Delete past duties
+              </Button>
+              <Button
+                variant="outline"
+                className="h-12 flex-1 rounded-full text-red-700 hover:bg-red-50 hover:text-red-800"
+                disabled={busy || clearing || !duties.length}
+                onClick={() => setConfirmClear(true)}
+              >
+                Clear entire roster
+              </Button>
+            </div>
+          )}
         </section>
       </div>
     </AppShell>

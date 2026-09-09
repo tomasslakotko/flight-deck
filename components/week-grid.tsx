@@ -58,6 +58,13 @@ export function WeekGrid({
                 <div className="text-[11px] opacity-80">
                   {formatClock(first, airportTz(flights[0]?.depIata))} – {formatClock(last, airportTz(flights[flights.length - 1]?.arrIata))} · {flights.length} {flights.length === 1 ? "flight" : "flights"}
                 </div>
+              ) : sby ? (
+                <div className="text-[11px] opacity-80">
+                  {sby.type === "reserve" ? "Reserve" : "Standby"}
+                  {sby.std || sby.sta
+                    ? ` · ${formatClock(sby.std, airportTz(sby.depIata))}–${formatClock(sby.sta, airportTz(sby.depIata))}`
+                    : ""}
+                </div>
               ) : showContinuations && continuation ? (
                 <div className="text-[11px] opacity-80">
                   from {format(parseISO(`${continuation.fromDate}T12:00:00`), "EEE")} · landing {formatClock(continuation.last.sta, airportTz(continuation.last.arrIata))}
@@ -111,7 +118,16 @@ export function WeekGrid({
                 : null}
               {sby ? (
                 <div className="rounded-xl bg-amber-50 px-2.5 py-2 text-xs font-medium text-amber-900">
-                  Standby {formatClock(sby.std, airportTz(sby.depIata))}–{formatClock(sby.sta, airportTz(sby.depIata))}
+                  <div className="font-semibold">
+                    {sby.type === "reserve" ? "Reserve" : "Standby"}
+                    {sby.depIata ? ` · ${sby.depIata}` : ""}
+                  </div>
+                  <div className="mt-0.5 text-[11px] text-amber-900/80">
+                    {sby.title}
+                    {sby.std || sby.sta
+                      ? ` · ${formatClock(sby.std, airportTz(sby.depIata))}–${formatClock(sby.sta, airportTz(sby.depIata))}`
+                      : ""}
+                  </div>
                 </div>
               ) : null}
               {hotel ? (

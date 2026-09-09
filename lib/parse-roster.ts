@@ -4,11 +4,12 @@ import { airportTz, toFlightIata } from "@/lib/airports";
 import { dateKey, dateKeyInZone, hhmmToToday } from "@/lib/dates";
 import { parseCrewNotes } from "@/lib/parse-crew";
 import { looksLikeNetlineIdp, parseNetlineIdp } from "@/lib/parse-netline-pdf";
-import { pickAirportCode, pickAllRoutes, pickRoute } from "@/lib/route-text";
+import { looksLikeIata, pickAirportCode, pickAllRoutes, pickRoute } from "@/lib/route-text";
 
 const DUTY_MATCHERS: { type: DutyType; re: RegExp }[] = [
   { type: "off", re: /\b(OFF|DO|D\/O|DAY[\s-]?OFF|FREE)\b/i },
-  { type: "standby", re: /\b(SBY|STB|STANDBY|HSBY|ASBY|H\/SBY)\b/i },
+  // SBYHOME2 / SBYA / HSBY — crew iCal uses glued codes, not bare "SBY"
+  { type: "standby", re: /\b(?:H\/SBY|HSBY|ASBY|SBY[A-Z0-9]*|STANDBY|STB)\b/i },
   { type: "reserve", re: /\b(RES|RSV|RESERVE)\b/i },
   { type: "hotel", re: /\b(HTL|HOTEL|LAYOVER|OVN)\b/i },
   { type: "sim", re: /\b(SIM|SFI|EBT|LOFT)\b/i },
@@ -65,14 +66,44 @@ function pickAllFlights(text: string) {
 }
 
 const REPORT_LABEL_RE = /^(CHECK[\s-]?IN|CHECK[\s-]?OUT|C\/I|C\/O|REPORT)\b/i;
+/** ☎️ SBYHOME2 · HSBY · SBYA — home/airport standby codes from crew iCal */
+const STANDBY_LABEL_RE =
+  /^(?:H\/SBY|HSBY|ASBY|SBY[A-Z0-9]*|STANDBY|STB)\b/i;
+/** HEL-MUC (03:00-05:35 UTC) — common crew iCal description */
+const ICS_ROUTE_UTC_RE =
+  /\b([A-Z]{3})\s*[-–—]\s*([A-Z]{3})\s*\(\s*(\d{1,2}[:.]\d{2})\s*[-–—]\s*(\d{1,2}[:.]\d{2})\s*UTC\s*\)/i;
+/** HEL (02:00-03:00 UTC) — check-in / SBY base + UTC window */
+const ICS_BASE_UTC_RE =
+  /\b([A-Z]{3})\s*\(\s*(\d{1,2}[:.]\d{2})\s*[-–—]\s*(\d{1,2}[:.]\d{2})\s*UTC\s*\)/i;
+
+function stripIcsEmoji(text: string) {
+  return text
+    .replace(/^[\uFE0F\u200D\s]*/u, "")
+    .replace(/^(?:[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}][\uFE0F\u200D]*)+\s*/u, "")
+    .replace(/^[✈️🛩☎️📞📱🏠]\s*/u, "")
+    .trim();
+}
 
 function isReportLabel(text: string) {
-  return REPORT_LABEL_RE.test(text.trim());
+  return REPORT_LABEL_RE.test(stripIcsEmoji(text.trim()));
+}
+
+function isCheckoutLabel(text: string) {
+  return /^(CHECK[\s-]?OUT|C\/O)\b/i.test(stripIcsEmoji(text.trim()));
+}
+
+function isStandbyLabel(text: string) {
+  return STANDBY_LABEL_RE.test(stripIcsEmoji(text.trim()));
 }
 
 function classifyDuty(text: string): DutyType {
   const firstLine = text.split("\n", 1)[0] ?? text;
-  if (isReportLabel(firstLine) && !pickRoute(firstLine).depIata) return "checkin";
+  if (isReportLabel(firstLine)) return "checkin";
+  // Standby before route/flight guesses — "BEG (08:30-21:00 UTC)" must not become a fake sector
+  if (isStandbyLabel(firstLine) || isStandbyLabel(text)) return "standby";
+  if (/\b(?:H\/SBY|HSBY|ASBY|SBY[A-Z0-9]*|STANDBY)\b/i.test(text) && !pickFlight(text)) {
+    return "standby";
+  }
   if (pickFlight(text) || pickRoute(text).depIata) return "flight";
   for (const row of DUTY_MATCHERS) {
     if (row.re.test(text)) return row.type;
@@ -87,6 +118,41 @@ function isReportDuty(duty: Duty) {
 
 function isCheckoutDuty(duty: Duty) {
   return /check\s*-?out|\bc\/o\b/i.test(duty.title);
+}
+
+function pickIcsRouteUtc(text: string) {
+  const m = text.toUpperCase().match(ICS_ROUTE_UTC_RE);
+  if (!m) return null;
+  const route = validRouteSafe(m[1], m[2]);
+  if (!route.depIata || !route.arrIata) return null;
+  return {
+    depIata: route.depIata,
+    arrIata: route.arrIata,
+    stdUtc: m[3].replace(".", ":"),
+    staUtc: m[4].replace(".", ":"),
+  };
+}
+
+function pickIcsBaseUtc(text: string) {
+  const m = text.toUpperCase().match(ICS_BASE_UTC_RE);
+  if (!m) return null;
+  if (!looksLikeIata(m[1])) return null;
+  return {
+    iata: m[1],
+    fromUtc: m[2].replace(".", ":"),
+    toUtc: m[3].replace(".", ":"),
+  };
+}
+
+function validRouteSafe(dep?: string, arr?: string) {
+  return pickRoute(`${dep}-${arr}`);
+}
+
+function utcHhmmOnDay(hhmm: string, day: Date) {
+  const [h, m] = hhmm.split(":").map(Number);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return undefined;
+  const d = new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate(), h, m, 0));
+  return d.toISOString();
 }
 
 function foldReportEvents(duties: Duty[]) {
@@ -186,12 +252,70 @@ function eventToDuties(
   occurrenceKey: string,
   startTime?: ICAL.Time | null,
 ): Duty[] {
-  const summary = event.summary ?? "";
+  const summary = (event.summary ?? "").replace(/^\uFEFF/, "").trim();
   const description = event.description ?? "";
   const location = event.location ?? "";
   const blob = `${summary}\n${description}\n${location}`;
+  const cleanSummary = stripIcsEmoji(summary);
+
+  // CHECKIN / CHECKOUT — never invent a fake flight route from the description.
+  if (isReportLabel(cleanSummary) || isReportLabel(summary)) {
+    const base = pickIcsBaseUtc(blob);
+    const depIata =
+      base?.iata ??
+      pickAirportCode(location) ??
+      pickAirportCode(description) ??
+      undefined;
+    const date = icalDateKey(startTime, start, depIata);
+    const seed = `${event.uid || summary}-${date}-${occurrenceKey}`;
+    return [
+      {
+        id: uid("ics", seed),
+        uid: event.uid || uid("ics", seed),
+        date,
+        type: "checkin",
+        title: isCheckoutLabel(cleanSummary) || isCheckoutLabel(summary) ? "CHECKOUT" : "CHECKIN",
+        depIata,
+        std: start.toISOString(),
+        sta: end?.toISOString(),
+        notes: pickNotes(description, summary),
+        source,
+      },
+    ];
+  }
+
+  // ☎️ SBYHOME2 + BEG (08:30-21:00 UTC) — home standby, not a flight
+  if (isStandbyLabel(cleanSummary) || isStandbyLabel(summary) || classifyDuty(blob) === "standby") {
+    const base = pickIcsBaseUtc(blob);
+    const depIata =
+      base?.iata ??
+      pickAirportCode(location) ??
+      pickAirportCode(description) ??
+      undefined;
+    const date = icalDateKey(startTime, start, depIata);
+    const title = cleanSummary || "SBY";
+    const seed = `${event.uid || title}-${date}-${occurrenceKey}`;
+    return [
+      {
+        id: uid("ics", seed),
+        uid: event.uid || uid("ics", seed),
+        date,
+        type: "standby",
+        title,
+        depIata,
+        std: start.toISOString(),
+        sta: end?.toISOString(),
+        notes: pickNotes(description, summary),
+        source,
+      },
+    ];
+  }
+
   const flights = pickAllFlights(blob);
-  const routes = pickAllRoutes(blob);
+  const icsRoute = pickIcsRouteUtc(blob);
+  const routes = icsRoute
+    ? [{ depIata: icsRoute.depIata, arrIata: icsRoute.arrIata }]
+    : pickAllRoutes(blob);
   const locIata = pickAirportCode(location);
   const ranges = [...blob.matchAll(new RegExp(TIME_RANGE_RE.source, "g"))];
   const looksLikeFlight = flights.length > 0 || routes.length > 0;
@@ -213,16 +337,32 @@ function eventToDuties(
     legs[0].route = { ...legs[0].route, depIata: locIata };
   }
 
-  const span = Math.max(1, (end?.getTime() ?? start.getTime()) - start.getTime());
+  let stdBase = start;
+  let staBase = end;
+  // Prefer UTC block times from description when present (crew iCal style).
+  if (icsRoute && legs.length === 1) {
+    const stdIso = utcHhmmOnDay(icsRoute.stdUtc, start);
+    let staIso = utcHhmmOnDay(icsRoute.staUtc, start);
+    if (stdIso && staIso && Date.parse(staIso) <= Date.parse(stdIso)) {
+      const next = new Date(start);
+      next.setUTCDate(next.getUTCDate() + 1);
+      staIso = utcHhmmOnDay(icsRoute.staUtc, next);
+    }
+    if (stdIso) stdBase = new Date(stdIso);
+    if (staIso) staBase = new Date(staIso);
+    legs[0].route = { depIata: icsRoute.depIata, arrIata: icsRoute.arrIata };
+  }
+
+  const span = Math.max(1, (staBase?.getTime() ?? stdBase.getTime()) - stdBase.getTime());
   const out: Duty[] = [];
   for (let i = 0; i < legs.length; i++) {
     const leg = legs[i];
-    let std = start;
-    let sta = end;
+    let std = stdBase;
+    let sta = staBase;
     if (legs.length > 1) {
       const slice = span / legs.length;
-      std = new Date(start.getTime() + i * slice);
-      sta = new Date(start.getTime() + (i + 1) * slice);
+      std = new Date(stdBase.getTime() + i * slice);
+      sta = new Date(stdBase.getTime() + (i + 1) * slice);
       const range = ranges[i];
       if (range) {
         const from = hhmmToToday(range[1].replace(".", ":"), std);
@@ -235,25 +375,20 @@ function eventToDuties(
         }
         if (to) sta = new Date(to);
       }
-    } else if (start && end && end.getTime() <= start.getTime()) {
-      sta = new Date(end.getTime() + 24 * 60 * 60 * 1000);
+    } else if (stdBase && staBase && staBase.getTime() <= stdBase.getTime()) {
+      sta = new Date(staBase.getTime() + 24 * 60 * 60 * 1000);
     }
 
     const depIata = leg.route.depIata;
     const arrIata = leg.route.arrIata;
     const flightNumber = leg.flightNumber;
     const type = classifyDuty(blob);
-    const reportOnly = isReportLabel(summary) && !pickRoute(summary).depIata;
-    const resolvedType = reportOnly
-      ? "checkin"
-      : flightNumber || (depIata && arrIata)
-        ? "flight"
-        : type;
+    const resolvedType = flightNumber || (depIata && arrIata) ? "flight" : type;
     const date = icalDateKey(startTime, std, depIata);
     const title =
       flightNumber && depIata
         ? `${flightNumber} ${depIata}–${arrIata ?? ""}`
-        : summary.trim() || type.toUpperCase();
+        : cleanSummary || summary.trim() || type.toUpperCase();
     const seed = `${event.uid || title}-${date}-${flightNumber ?? i}-${occurrenceKey}`;
     out.push({
       id: uid("ics", seed),

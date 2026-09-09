@@ -11,7 +11,7 @@ import {
 } from "react";
 import { toast } from "sonner";
 import { db } from "@/lib/db";
-import { tryStorage } from "@/lib/idb";
+import { tryStorage, withTimeout } from "@/lib/idb";
 import { downloadIcs } from "@/lib/fetch-ics";
 import { buildDemoProfile } from "@/lib/demo-data";
 import { todayKey } from "@/lib/dates";
@@ -45,14 +45,18 @@ type RosterContextValue = {
   online: boolean;
   session: SessionStamp | null;
   syncError: string | null;
-  importDuties: (incoming: Duty[], mode: "merge" | "replace") => Promise<Duty[]>;
+  importDuties: (
+    incoming: Duty[],
+    mode: "merge" | "replace",
+    opts?: { resumeAutoSync?: boolean },
+  ) => Promise<Duty[]>;
   upsertDuty: (duty: Duty) => Promise<void>;
   deleteDuty: (id: string) => Promise<void>;
   replacePassengers: (flightDutyId: string, rows: Passenger[]) => Promise<void>;
   savePassenger: (row: Passenger) => Promise<void>;
   updateProfile: (patch: Partial<CrewProfile>) => Promise<void>;
   clearPastDuties: () => Promise<number>;
-  clearRoster: () => Promise<void>;
+  clearRoster: () => Promise<boolean>;
   markSynced: () => Promise<void>;
   refreshSession: (force?: boolean, silent?: boolean) => Promise<void>;
 };
@@ -137,11 +141,22 @@ async function readStore(): Promise<Snapshot> {
     db.passengers.toArray(),
     db.profile.get("me"),
   ]);
+  const nextProfile = scrubProfileName(profile ?? buildDemoProfile());
   return {
     duties: sortDuties(duties),
     passengers,
-    profile: profile ?? buildDemoProfile(),
+    profile: nextProfile,
   };
+}
+
+/** Drop leftover demo / personal names from the header (e.g. "Andrea"). */
+function scrubProfileName(profile: CrewProfile): CrewProfile {
+  const name = (profile.name ?? "").trim();
+  if (!name) return { ...profile, name: "" };
+  if (/^andrea$/i.test(name) || /^crew$/i.test(name) || /^adrea$/i.test(name)) {
+    return { ...profile, name: "" };
+  }
+  return profile;
 }
 
 async function persistLive(rows: LiveFlight[]) {
@@ -170,6 +185,10 @@ export function RosterProvider({ children }: { children: React.ReactNode }) {
   const sessionRef = useRef<SessionStamp | null>(null);
   const liveRef = useRef<Record<string, LiveFlight>>({});
   const bootstrapping = useRef(false);
+  /** Bumps to cancel in-flight persistDuties writes that would resurrect a cleared roster. */
+  const persistGen = useRef(0);
+  /** After Clear roster — block silent iCal auto-merge until the user imports/syncs again. */
+  const suppressIcalRef = useRef(false);
   const [ready] = useState(true);
   const [hydrated, setHydrated] = useState(false);
   const [sessionLoading, setSessionLoading] = useState(true);
@@ -229,6 +248,9 @@ export function RosterProvider({ children }: { children: React.ReactNode }) {
             passengers: cleanedPassengers,
             profile: stored.profile,
           });
+          if ((stored.profile.name ?? "") === "") {
+            await tryStorage(() => db.profile.put(stored.profile));
+          }
           const droppedDemo = stored.duties.length !== cleanedDuties.length;
           const droppedPax = stored.passengers.length !== cleanedPassengers.length;
           if (droppedDemo || droppedPax || cleanedDuties.length !== stored.duties.length) {
@@ -243,11 +265,13 @@ export function RosterProvider({ children }: { children: React.ReactNode }) {
           }
         }
       }
-      const [liveRows, sessionFlag] = await Promise.all([
+      const [liveRows, sessionFlag, suppressFlag] = await Promise.all([
         tryStorage(() => db.liveFlights.toArray()),
         tryStorage(() => db.flags.get("session")),
+        tryStorage(() => db.flags.get("suppressIcal")),
       ]);
       if (cancelled) return;
+      suppressIcalRef.current = suppressFlag?.value === true || suppressFlag?.value === "true";
       if (liveRows?.length) {
         setLiveByIata(
           Object.fromEntries(liveRows.map((row) => [row.flightIata, row])),
@@ -265,24 +289,45 @@ export function RosterProvider({ children }: { children: React.ReactNode }) {
   }, [apply]);
 
   const persistDuties = useCallback((rows: Duty[]) => {
+    const gen = ++persistGen.current;
     void tryStorage(async () => {
+      if (gen !== persistGen.current) return;
       await db.transaction("rw", db.duties, async () => {
+        if (gen !== persistGen.current) return;
         await db.duties.clear();
+        if (gen !== persistGen.current) return;
         if (rows.length) await db.duties.bulkPut(rows);
       });
     }, 12_000);
   }, []);
 
+  const setSuppressIcal = useCallback(async (on: boolean) => {
+    suppressIcalRef.current = on;
+    await tryStorage(async () => {
+      if (on) await db.flags.put({ key: "suppressIcal", value: true });
+      else await db.flags.delete("suppressIcal");
+    }, 15_000);
+  }, []);
+
   const importDuties = useCallback(
-    async (incoming: Duty[], mode: "merge" | "replace") => {
+    async (
+      incoming: Duty[],
+      mode: "merge" | "replace",
+      opts?: { resumeAutoSync?: boolean },
+    ) => {
+      // After Clear roster, ignore background merges until the user imports again
+      if (suppressIcalRef.current && !opts?.resumeAutoSync) {
+        return dutiesRef.current;
+      }
       markDirty();
+      if (opts?.resumeAutoSync) await setSuppressIcal(false);
       const next = normalizeDuties(mergeDutyLists(dutiesRef.current, incoming, mode));
       dutiesRef.current = next;
       setDuties(next);
       persistDuties(next);
       return next;
     },
-    [markDirty, persistDuties],
+    [markDirty, persistDuties, setSuppressIcal],
   );
 
   const upsertDuty = useCallback(
@@ -380,6 +425,10 @@ export function RosterProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      if (force && typeof window !== "undefined") {
+        window.dispatchEvent(new Event("flightdeck-refresh"));
+      }
+
       if (!force && sessionIsFresh(sessionRef.current) && !icalIsStale(sessionRef.current) && !liveIsStale(sessionRef.current)) {
         setSessionLoading(false);
         setSyncError(null);
@@ -395,20 +444,33 @@ export function RosterProvider({ children }: { children: React.ReactNode }) {
       try {
         let nextDuties = dutiesRef.current;
         const icalUrl = profileRef.current.icalUrl?.trim();
+        // Keep Clear roster sticky — only Import (resumeAutoSync) lifts the hold.
+        // Header Refresh must not silently restore the full iCal after a clear.
+        if (force && !silent && suppressIcalRef.current) {
+          toast.message("Roster is cleared", {
+            description: "Import iCal or a PDF to load duties again. Refresh won’t restore them.",
+          });
+        }
         const wantIcal =
           Boolean(icalUrl) &&
           profileRef.current.autoRefreshIcal !== false &&
+          !suppressIcalRef.current &&
           (force || icalIsStale(sessionRef.current));
 
         if (wantIcal && icalUrl) {
           try {
             const text = await downloadIcs(icalUrl);
-            const { parseIcs } = await import("@/lib/parse-roster");
-            const parsed = parseIcs(text, "ical");
-            if (parsed.duties.length) {
-              nextDuties = await importDuties(parsed.duties, "merge");
+            // User may have cleared while this download was in flight (common on mobile)
+            if (suppressIcalRef.current) {
+              nextDuties = dutiesRef.current;
+            } else {
+              const { parseIcs } = await import("@/lib/parse-roster");
+              const parsed = parseIcs(text, "ical");
+              if (parsed.duties.length) {
+                nextDuties = await importDuties(parsed.duties, "merge");
+              }
+              if (!suppressIcalRef.current) icalAt = Date.now();
             }
-            icalAt = Date.now();
           } catch (err) {
             error = err instanceof Error ? err.message : "Roster update failed";
             if (force && !silent) toast.error(error);
@@ -469,7 +531,7 @@ export function RosterProvider({ children }: { children: React.ReactNode }) {
         setSessionLoading(false);
       }
     },
-    [importDuties, markSynced],
+    [importDuties, markSynced, setSuppressIcal],
   );
 
   useEffect(() => {
@@ -488,7 +550,8 @@ export function RosterProvider({ children }: { children: React.ReactNode }) {
     };
     const onOnline = () => {
       setOnline(true);
-      void refreshSession(true, true);
+      // Silent — do not force iCal (would undo Clear roster)
+      void refreshSession(false, true);
     };
     document.addEventListener("visibilitychange", onVis);
     window.addEventListener("focus", onVis);
@@ -523,19 +586,53 @@ export function RosterProvider({ children }: { children: React.ReactNode }) {
 
   const clearRoster = useCallback(async () => {
     markDirty();
+    // Invalidate any in-flight persistDuties / iCal merges
+    persistGen.current += 1;
+    suppressIcalRef.current = true;
     dutiesRef.current = [];
     setDuties([]);
     setPassengers([]);
     setLiveByIata({});
-    setSession(null);
-    sessionRef.current = null;
     setSyncError(null);
-    await tryStorage(async () => {
-      await db.duties.clear();
-      await db.passengers.clear();
-      await db.liveFlights.clear();
-      await db.flags.delete("session");
-    });
+
+    const stamp: SessionStamp = {
+      at: Date.now(),
+      date: todayKey(),
+      icalAt: Date.now(),
+      liveAt: Date.now(),
+      offline: false,
+    };
+    sessionRef.current = stamp;
+    setSession(stamp);
+
+    let ok = false;
+    for (let attempt = 0; attempt < 3 && !ok; attempt++) {
+      try {
+        await withTimeout(
+          (async () => {
+            await db.transaction("rw", db.duties, db.passengers, db.liveFlights, async () => {
+              await db.duties.clear();
+              await db.passengers.clear();
+              await db.liveFlights.clear();
+            });
+            await db.flags.put({ key: "suppressIcal", value: true });
+            await persistSession(stamp);
+          })(),
+          15_000,
+        );
+        const left = await withTimeout(db.duties.count(), 8_000);
+        ok = left === 0;
+      } catch {
+        ok = false;
+      }
+    }
+
+    // Keep UI empty even if storage flaked — suppress blocks auto re-import
+    dutiesRef.current = [];
+    setDuties([]);
+    setPassengers([]);
+    setLiveByIata({});
+    return ok;
   }, [markDirty]);
 
   const value = useMemo(

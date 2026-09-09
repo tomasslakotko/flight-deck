@@ -23,7 +23,7 @@ export function DutyTimeline({
 
   return (
     <div className="flex min-w-0 flex-1 flex-col justify-center px-2">
-      <div className="relative flex items-end gap-0 overflow-x-auto pb-1">
+      <div className="relative flex items-end gap-0 overflow-x-auto">
         <Tick label="Shift start" time={formatClock(shiftStart, startTz)} tone="green" />
         {flights.map((f) => (
           <Link

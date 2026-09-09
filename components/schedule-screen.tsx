@@ -30,6 +30,9 @@ export function ScheduleScreen() {
   const detailKey = selectedDay ?? (view === "month" ? today : null);
   const detailItems = detailKey ? (byDate.get(detailKey) ?? []) : [];
   const detailFlights = detailItems.filter((d) => isFlightDuty(d) && d.type !== "checkin");
+  const detailStandbys = detailItems.filter((d) => d.type === "standby" || d.type === "reserve");
+  const detailOffOnly =
+    !detailFlights.length && !detailStandbys.length && detailItems.some((d) => d.type === "off");
 
   return (
     <AppShell wide={view === "month"}>
@@ -108,31 +111,52 @@ export function ScheduleScreen() {
                 <h2 className="text-sm font-semibold">
                   {format(parseISO(`${detailKey}T12:00:00`), "EEEE, d MMMM")}
                 </h2>
-                {detailFlights.length ? (
-                  <ul className="mt-3 divide-y">
-                    {detailFlights.map((f) => (
-                      <li key={f.id}>
-                        <Link
-                          href={`/flight/${f.id}`}
-                          className="flex items-center justify-between gap-3 py-2.5 text-sm hover:bg-slate-50"
-                        >
-                          <div>
-                            <div className="font-semibold">{flightRouteLabel(f)}</div>
-                            <div className="text-xs text-muted-foreground">
-                              {f.flightNumber} · {formatClock(f.std, airportTz(f.depIata))}–
-                              {formatClock(f.sta, airportTz(f.arrIata))}
-                              {f.privateNotes?.trim() ? " · note" : ""}
-                            </div>
-                          </div>
-                          <span className="text-xs text-primary">Open</span>
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
-                ) : detailItems.some((d) => d.type === "off") ? (
+                {!detailFlights.length && !detailStandbys.length && !detailOffOnly ? (
+                  <p className="mt-2 text-sm text-muted-foreground">No flights this day</p>
+                ) : detailOffOnly ? (
                   <p className="mt-2 text-sm text-muted-foreground">Day off</p>
                 ) : (
-                  <p className="mt-2 text-sm text-muted-foreground">No flights this day</p>
+                  <div className="mt-3 space-y-2">
+                    {detailStandbys.map((d) => (
+                      <div
+                        key={d.id}
+                        className="rounded-xl bg-amber-50 px-3 py-2.5 text-sm text-amber-950"
+                      >
+                        <div className="font-semibold">
+                          {d.type === "reserve" ? "Reserve" : "Standby"}
+                          {d.depIata ? ` · ${d.depIata}` : ""}
+                        </div>
+                        <div className="mt-0.5 text-xs text-amber-900/80">
+                          {d.title}
+                          {d.std || d.sta
+                            ? ` · ${formatClock(d.std, airportTz(d.depIata))}–${formatClock(d.sta, airportTz(d.depIata))}`
+                            : ""}
+                        </div>
+                      </div>
+                    ))}
+                    {detailFlights.length ? (
+                      <ul className="divide-y rounded-xl ring-1 ring-slate-100">
+                        {detailFlights.map((f) => (
+                          <li key={f.id}>
+                            <Link
+                              href={`/flight/${f.id}`}
+                              className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm hover:bg-slate-50"
+                            >
+                              <div>
+                                <div className="font-semibold">{flightRouteLabel(f)}</div>
+                                <div className="text-xs text-muted-foreground">
+                                  {f.flightNumber} · {formatClock(f.std, airportTz(f.depIata))}–
+                                  {formatClock(f.sta, airportTz(f.arrIata))}
+                                  {f.privateNotes?.trim() ? " · note" : ""}
+                                </div>
+                              </div>
+                              <span className="text-xs text-primary">Open</span>
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </div>
                 )}
               </section>
             ) : null}

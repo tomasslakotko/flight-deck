@@ -15,6 +15,7 @@
 		B73C9524D91591AFF27CBE0B /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91C6CD715B79E10B1EEEA4FB /* ContentView.swift */; };
 		DDF1D8067E19D033D28E68E3 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B1E3C9E012CCE9F5C561BF66 /* Assets.xcassets */; };
 		F3BD8A4635E82370075650F9 /* WidgetStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5D882A43E3B20AB965799BB /* WidgetStore.swift */; };
+		F5073B9FD285DE5D140B6B1F /* NativeNotifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE2B41D5C4E624F853E2EDEF /* NativeNotifications.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -53,6 +54,7 @@
 		B1E3C9E012CCE9F5C561BF66 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B97B75C9245BFD9CEC60A608 /* FlightDeck.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = FlightDeck.entitlements; sourceTree = "<group>"; };
 		DA03EEC134A5DE3A797FA51B /* FlightDeckWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = FlightDeckWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		DE2B41D5C4E624F853E2EDEF /* NativeNotifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeNotifications.swift; sourceTree = "<group>"; };
 		E5D882A43E3B20AB965799BB /* WidgetStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetStore.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -93,6 +95,7 @@
 				B97B75C9245BFD9CEC60A608 /* FlightDeck.entitlements */,
 				6C824400B279C7EB2518A16D /* FlightDeckApp.swift */,
 				B09CBF9EBB0438D0D6973B9E /* Info.plist */,
+				DE2B41D5C4E624F853E2EDEF /* NativeNotifications.swift */,
 			);
 			path = FlightDeck;
 			sourceTree = "<group>";
@@ -211,6 +214,7 @@
 			files = (
 				B73C9524D91591AFF27CBE0B /* ContentView.swift in Sources */,
 				5E828258151062E07895C744 /* FlightDeckApp.swift in Sources */,
+				F5073B9FD285DE5D140B6B1F /* NativeNotifications.swift in Sources */,
 				87F6327979A2DF758EE7C003 /* WidgetStore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

@@ -157,12 +157,8 @@ export function flightRouteLabel(duty: {
   return duty.flightNumber ?? "Route TBA";
 }
 
-export const AIRPORT_NOTES: Record<string, string> = {
-  CPH: "Check in at the crew center, Level 1, Terminal 3. Allow extra time at security.",
-  RIX: "Crew briefing airside. Allow extra time at security.",
-  AMS: "Crew report at D-pier crew center. Schiphol staff lane is marked “CREW”.",
-  ARN: "Report at Terminal 5 crew security. Hotel shuttle bay is outside arrivals 2.",
-};
+/** Optional crew tips by airport — only show real notes here (no demo placeholders). */
+export const AIRPORT_NOTES: Record<string, string> = {};
 
 export function toCallsign(flightIata?: string) {
   if (!flightIata) return undefined;

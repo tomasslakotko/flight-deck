@@ -26,7 +26,7 @@ The app loads: https://er324322ertd.vercel.app
 | **Route card** | Light/dark adaptive card with large airport codes |
 | **Full day** | Timeline: Shift start → sectors → Shift end, plus flight number, registration, status |
 
-Also when relevant: **Standby / Reserve / Day off**, **private note** snippet, **Live … min ago**.
+Also when relevant: **Standby / Reserve** with **airBaltic (BT) departures from your SBY base** (BEG, RIX, …), **Day off**, **private note** snippet, **Live … min ago**.
 
 ### Lock Screen
 
@@ -43,6 +43,16 @@ Also when relevant: **Standby / Reserve / Day off**, **private note** snippet, *
 Open the app once with a roster imported so widgets sync.
 
 Widgets refresh when you open the app (roster → App Group → WidgetKit).
+
+## Notifications (iPhone)
+
+In **Import / Settings**, turn on alerts. The app asks for iOS permission, then schedules:
+
+- Check-in −15 min and at report
+- Boarding −30 min STD
+- Delay bumps (while live data is refreshing)
+
+These use **native local notifications** (not Safari web push), so they can fire after you leave the app — as long as you opened Flight Deck once with notifications on and a roster loaded.
 
 ## Local web debugging
 

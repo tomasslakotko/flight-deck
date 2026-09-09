@@ -1,5 +1,12 @@
 import { airportTz, flightRouteLabel, toFlightIata } from "@/lib/airports";
-import { formatClock, minutesUntil, parseFlightInstant, todayKey } from "@/lib/dates";
+import {
+  departureBoardLabel,
+  departureTimes,
+  resolveSbyBase,
+  todayStandby,
+  type BaseDeparture,
+} from "@/lib/base-departures";
+import { formatClock, minutesUntil, nextDateKey, parseFlightInstant, todayKey } from "@/lib/dates";
 import {
   checkInIso,
   checkOutInstant,
@@ -13,7 +20,73 @@ import {
 } from "@/lib/shift";
 import type { Duty, LiveFlight } from "@/lib/types";
 
+function buildSbyBoardPayload(
+  duties: Duty[],
+  today: string,
+  now: Date,
+  opts: WidgetOptions,
+  noteSnippet: string | undefined,
+  liveUpdatedAt: number | undefined,
+  tomorrow: WidgetTomorrowPreview,
+): WidgetPayload {
+  const flights = flightsOnDate(duties, today).filter(isFlightDuty);
+  const sby = todayStandby(duties, today);
+  const base = resolveSbyBase(sby, flights);
+  const copy = dayKindCopy(sby?.type === "reserve" ? "reserve" : "standby", base);
+  const board = opts.baseDepartures ?? [];
+  const segments = board.length ? sbyDepartureSegments(board) : [];
+  const windowLabel =
+    sby?.std || sby?.sta
+      ? `${sby.std ? formatClock(sby.std, airportTz(base)) : "—"}–${sby.sta ? formatClock(sby.sta, airportTz(base)) : "—"}`
+      : undefined;
+  const detailParts = [
+    windowLabel,
+    board.length ? `${board.length} BT-op from ${base}` : copy.detail,
+    noteSnippet,
+  ].filter(Boolean);
+  const nextDep = board[0];
+  const nextTimes = nextDep ? departureTimes(nextDep) : undefined;
+  return {
+    type: "widget",
+    updatedAt: now.getTime() / 1000,
+    headline: copy.headline,
+    detail: detailParts.join(" · "),
+    reportAt: epochSec(sby?.std),
+    checkoutAt: epochSec(sby?.sta),
+    route: nextDep ? departureBoardLabel(nextDep) : base,
+    flightNumber: nextDep?.flightIata,
+    flightCount: board.length,
+    empty: board.length === 0,
+    dayKind: sby?.type === "reserve" ? "reserve" : "standby",
+    noteSnippet,
+    liveUpdatedAt: board.length ? now.getTime() / 1000 : liveUpdatedAt,
+    tomorrow,
+    depIata: base ?? nextDep?.depIata,
+    arrIata: nextDep?.arrIata,
+    depTime: nextTimes?.startTime ?? (sby?.std ? formatClock(sby.std, airportTz(base)) : undefined),
+    arrTime: nextTimes?.endTime ?? (sby?.sta ? formatClock(sby.sta, airportTz(base)) : undefined),
+    checkInTime: sby?.std ? formatClock(sby.std, airportTz(base)) : undefined,
+    checkOutTime: sby?.sta ? formatClock(sby.sta, airportTz(base)) : undefined,
+    statusLabel: copy.statusLabel,
+    countdown: nextDep
+      ? formatCountdown(minutesUntil(nextDep.etd ?? nextDep.std, now)) ?? "—"
+      : "—",
+    progress: 0,
+    segments,
+  };
+}
+
 export type WidgetDayKind = "flight" | "off" | "standby" | "reserve" | "empty";
+
+export type WidgetTomorrowPreview = {
+  kind: WidgetDayKind;
+  title: string;
+  detail: string;
+  route?: string;
+  flights?: string;
+  checkInTime?: string;
+  flightCount?: number;
+};
 
 export type WidgetDaySegment = {
   kind: "start" | "flight" | "end";
@@ -42,6 +115,7 @@ export type WidgetPayload = {
   dayKind?: WidgetDayKind;
   noteSnippet?: string;
   liveUpdatedAt?: number;
+  tomorrow?: WidgetTomorrowPreview;
   depIata?: string;
   arrIata?: string;
   depTime?: string;
@@ -232,43 +306,113 @@ function resolveDayKind(duties: Duty[], today: string, flights: Duty[]): WidgetD
   const day = dutiesOnDate(duties, today);
   if (day.some((d) => d.type === "standby")) return "standby";
   if (day.some((d) => d.type === "reserve")) return "reserve";
-  if (day.some((d) => d.type === "off")) return "off";
-  if (!day.length) return "empty";
-  return "empty";
+  // No flights (and no standby/reserve) → treat as day off
+  return "off";
 }
 
-function dayKindCopy(kind: WidgetDayKind): { headline: string; detail: string; statusLabel: string } {
+function dayKindCopy(
+  kind: WidgetDayKind,
+  base?: string,
+): { headline: string; detail: string; statusLabel: string } {
   switch (kind) {
     case "standby":
       return {
-        headline: "Standby",
-        detail: "On call today — keep the app open for updates",
+        headline: base ? `Standby · ${base}` : "Standby",
+        detail: base
+          ? `BT-operated departures from ${base}`
+          : "On call today — keep the app open for updates",
         statusLabel: "STANDBY",
       };
     case "reserve":
       return {
-        headline: "Reserve",
-        detail: "Reserve duty today — stay reachable",
+        headline: base ? `Reserve · ${base}` : "Reserve",
+        detail: base
+          ? `BT-operated departures from ${base}`
+          : "Reserve duty today — stay reachable",
         statusLabel: "RESERVE",
       };
     case "off":
+    case "empty":
+    default:
       return {
         headline: "Day off",
         detail: "No flying today",
         statusLabel: "OFF",
       };
-    default:
-      return {
-        headline: "No duty today",
-        detail: "Import your roster in Flight Deck",
-        statusLabel: "EMPTY",
-      };
   }
+}
+
+function sbyDepartureSegments(rows: BaseDeparture[]): WidgetDaySegment[] {
+  return rows.slice(0, 8).map((row) => {
+    const times = departureTimes(row);
+    const delayed = (row.delayMin ?? 0) > 0;
+    return {
+      kind: "flight" as const,
+      label: departureBoardLabel(row),
+      flightNumber: row.flightIata,
+      aircraftType: row.aircraftType ?? undefined,
+      gate: row.gate ? `Gate ${row.gate}` : row.terminal ? `T${row.terminal}` : undefined,
+      status: delayed
+        ? `Delayed +${Math.round(row.delayMin!)}m`
+        : row.status
+          ? row.status.replace(/_/g, " ")
+          : "Scheduled",
+      delayed,
+      startTime: times.startTime,
+      endTime: times.endTime,
+    };
+  });
+}
+
+function buildTomorrowPreview(duties: Duty[], today: string): WidgetTomorrowPreview {
+  const tomorrow = nextDateKey(today);
+  const flights = flightsOnDate(duties, tomorrow).filter(isFlightDuty);
+  const kind = resolveDayKind(duties, tomorrow, flights);
+
+  if (kind === "flight" && flights.length) {
+    const bounds = shiftBounds(duties, tomorrow);
+    const first = flights[0];
+    const { dep, arr, via } = dayRoute(flights);
+    const route = [dep, ...via, arr].filter(Boolean).join("→");
+    const flightNums = flights.map((f) => f.flightNumber).filter(Boolean).join(" / ");
+    const ciIso = bounds?.start || checkInIso(first);
+    const checkInTime = ciIso ? formatClock(ciIso, airportTz(first.depIata)) : undefined;
+    const detail = [flightNums || null, route || null, checkInTime ? `CI ${checkInTime}` : null, `${flights.length} sector${flights.length === 1 ? "" : "s"}`]
+      .filter(Boolean)
+      .join(" · ");
+    return {
+      kind: "flight",
+      title: "Tomorrow",
+      detail,
+      route: route || undefined,
+      flights: flightNums || undefined,
+      checkInTime,
+      flightCount: flights.length,
+    };
+  }
+
+  if (kind === "standby" || kind === "reserve" || kind === "off") {
+    const sby = todayStandby(duties, tomorrow);
+    const copy = dayKindCopy(kind, sby?.depIata);
+    return {
+      kind,
+      title: `Tomorrow · ${copy.headline}`,
+      detail: copy.detail,
+    };
+  }
+
+  return {
+    kind: "off",
+    title: "Tomorrow · Day off",
+    detail: "No flying tomorrow",
+  };
 }
 
 export type WidgetOptions = {
   position?: string;
   liveByIata?: Record<string, LiveFlight>;
+  /** airBaltic departures from SBY base (BEG / RIX / …) */
+  baseDepartures?: BaseDeparture[];
 };
 
 /** Build a compact snapshot for iOS WidgetKit. */
@@ -281,24 +425,22 @@ export function buildWidgetPayload(duties: Duty[], now = new Date(), opts: Widge
   const dayKind = resolveDayKind(duties, today, flights);
   const noteSnippet = noteSnippetForDay(duties, today, focus);
   const liveUpdatedAt = liveUpdatedAtSec(flights, opts.liveByIata);
+  const tomorrow = buildTomorrowPreview(duties, today);
+  const sby = todayStandby(duties, today);
+  const flyingDone =
+    flights.length > 0 &&
+    flights.every((f) => {
+      const left = minutesUntil(f.sta ?? f.std, now);
+      return left != null && left <= 0;
+    });
+
+  // Pure SBY day, or flying finished and evening SBY remains
+  if (sby && (!flights.length || flyingDone)) {
+    return buildSbyBoardPayload(duties, today, now, opts, noteSnippet, liveUpdatedAt, tomorrow);
+  }
 
   if (!focus && !flights.length) {
-    const copy = dayKindCopy(dayKind);
-    return {
-      type: "widget",
-      updatedAt: now.getTime() / 1000,
-      headline: copy.headline,
-      detail: noteSnippet ? `${copy.detail} · ${noteSnippet}` : copy.detail,
-      flightCount: 0,
-      empty: true,
-      dayKind,
-      noteSnippet,
-      liveUpdatedAt,
-      statusLabel: copy.statusLabel,
-      countdown: "—",
-      progress: 0,
-      segments: [],
-    };
+    return buildSbyBoardPayload(duties, today, now, opts, noteSnippet, liveUpdatedAt, tomorrow);
   }
 
   const first = flights[0] ?? focus!;
@@ -382,6 +524,7 @@ export function buildWidgetPayload(duties: Duty[], now = new Date(), opts: Widge
     dayKind: "flight",
     noteSnippet,
     liveUpdatedAt,
+    tomorrow,
     depIata: focus?.depIata ?? dayDep,
     arrIata: focus?.arrIata ?? dayArr,
     depTime,

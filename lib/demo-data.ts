@@ -3,8 +3,8 @@ import type { CrewProfile } from "@/lib/types";
 export function buildDemoProfile(): CrewProfile {
   return {
     id: "me",
-    name: "Crew",
-    position: "CA",
+    name: "",
+    position: "L1",
   };
 }
 

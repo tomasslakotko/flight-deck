@@ -2,7 +2,8 @@ const IATA_NOISE = new Set([
   "AND", "THE", "FOR", "OFF", "SBY", "POS", "STD", "STA", "UTC", "GMT", "PAD", "TTL", "PAX",
   "INF", "CHD", "VIP", "FLT", "MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN", "JAN", "FEB",
   "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC", "CRE", "ROW",
-  "REP", "ORT", "CEN", "TER", "AIR", "POR", "WIT", "HIN", "MIN",
+  "REP", "ORT", "CEN", "TER", "AIR", "POR", "WIT", "HIN", "MIN", "ICA", "CAO", "CAQ",
+  "CHECK", "INN", "OUT",
 ]);
 
 export const ROUTE_SEP_RE = /\b([A-Z]{3})\s*(?:[-–—to/]|→|✈)+\s*([A-Z]{3})\b/g;

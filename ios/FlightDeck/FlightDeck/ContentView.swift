@@ -97,9 +97,22 @@ struct WebView: UIViewRepresentable {
       }
       guard let data = raw.data(using: .utf8),
             let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-            (json["type"] as? String) == "widget"
+            let type = json["type"] as? String
       else { return }
 
+      switch type {
+      case "widget":
+        handleWidget(json)
+      case "notifications":
+        handleNotifications(json)
+      case "notify":
+        handleNotify(json)
+      default:
+        break
+      }
+    }
+
+    private func handleWidget(_ json: [String: Any]) {
       let segments: [WidgetDaySegment]? = {
         guard let raw = json["segments"] as? [[String: Any]] else { return nil }
         return raw.map { item in
@@ -118,6 +131,19 @@ struct WebView: UIViewRepresentable {
         }
       }()
 
+      let tomorrow: WidgetTomorrowPreview? = {
+        guard let raw = json["tomorrow"] as? [String: Any] else { return nil }
+        return WidgetTomorrowPreview(
+          kind: (raw["kind"] as? String) ?? "empty",
+          title: (raw["title"] as? String) ?? "Tomorrow",
+          detail: (raw["detail"] as? String) ?? "",
+          route: raw["route"] as? String,
+          flights: raw["flights"] as? String,
+          checkInTime: raw["checkInTime"] as? String,
+          flightCount: raw["flightCount"] as? Int
+        )
+      }()
+
       let snapshot = WidgetSnapshot(
         updatedAt: (json["updatedAt"] as? Double) ?? Date().timeIntervalSince1970,
         headline: (json["headline"] as? String) ?? "Flight Deck",
@@ -131,6 +157,7 @@ struct WebView: UIViewRepresentable {
         dayKind: json["dayKind"] as? String,
         noteSnippet: json["noteSnippet"] as? String,
         liveUpdatedAt: json["liveUpdatedAt"] as? Double,
+        tomorrow: tomorrow,
         depIata: json["depIata"] as? String,
         arrIata: json["arrIata"] as? String,
         depTime: json["depTime"] as? String,
@@ -146,6 +173,48 @@ struct WebView: UIViewRepresentable {
       )
       WidgetStore.save(snapshot)
       WidgetCenter.shared.reloadAllTimelines()
+    }
+
+    private func handleNotifications(_ json: [String: Any]) {
+      let action = (json["action"] as? String) ?? "sync"
+      switch action {
+      case "request":
+        NativeNotifications.requestPermission { granted in
+          self.emitNotifEvent(action: "permission", granted: granted)
+        }
+      case "clear":
+        NativeNotifications.clearScheduled()
+      case "sync":
+        let enabled = (json["enabled"] as? Bool) ?? true
+        if !enabled {
+          NativeNotifications.clearScheduled()
+          return
+        }
+        let notices = json["notices"] as? [[String: Any]] ?? []
+        NativeNotifications.requestPermission { granted in
+          guard granted else { return }
+          NativeNotifications.sync(notices: notices)
+        }
+      default:
+        break
+      }
+    }
+
+    private func handleNotify(_ json: [String: Any]) {
+      let title = (json["title"] as? String) ?? "Flight Deck"
+      let body = (json["body"] as? String) ?? ""
+      let id = json["id"] as? String ?? json["tag"] as? String
+      let url = json["url"] as? String
+      NativeNotifications.deliverNow(title: title, body: body, id: id, url: url)
+    }
+
+    private func emitNotifEvent(action: String, granted: Bool) {
+      let js = """
+      window.dispatchEvent(new CustomEvent('flightdeck-native-notif', {
+        detail: { action: '\(action)', granted: \(granted ? "true" : "false") }
+      }));
+      """
+      webView?.evaluateJavaScript(js, completionHandler: nil)
     }
 
     func webView(

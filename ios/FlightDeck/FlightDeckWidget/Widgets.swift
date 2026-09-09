@@ -138,7 +138,7 @@ struct LockScreenDutyView: View {
   @Environment(\.widgetFamily) private var family
 
   private var snap: WidgetSnapshot { entry.snapshot }
-  private var dayKind: String { snap.dayKind ?? (snap.empty ? "empty" : "flight") }
+  private var dayKind: String { snap.dayKind ?? (snap.empty ? "off" : "flight") }
 
   @ViewBuilder
   var body: some View {
@@ -193,10 +193,22 @@ struct LockScreenDutyView: View {
         Label(snap.headline, systemImage: dayKindIcon)
           .font(.headline)
           .lineLimit(1)
-        Text(snap.noteSnippet ?? snap.detail)
-          .font(.caption2)
-          .foregroundStyle(.secondary)
-          .lineLimit(2)
+        if let fn = snap.flightNumber, let route = snap.route, dayKind != "off" {
+          Text("\(fn) · \(route)")
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+          if let t = snap.depTime {
+            Text(t)
+              .font(.caption2.monospacedDigit())
+              .foregroundStyle(.secondary)
+          }
+        } else {
+          Text(snap.noteSnippet ?? snap.detail)
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .lineLimit(2)
+        }
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
     } else if snap.empty {
@@ -351,18 +363,19 @@ struct PulseDutyView: View {
 
   private var snap: WidgetSnapshot { entry.snapshot }
   private var progress: CGFloat { CGFloat(min(1, max(0, snap.progress ?? 0))) }
-  private var dayKind: String { snap.dayKind ?? (snap.empty ? "empty" : "flight") }
+  private var dayKind: String { snap.dayKind ?? (snap.empty ? "off" : "flight") }
 
   var body: some View {
     if snap.statusLabel == "SETUP" {
       EmptyPulse(title: snap.headline, detail: snap.detail)
     } else if dayKind == "standby" || dayKind == "reserve" || dayKind == "off" || (snap.empty && dayKind != "flight") {
       DayTypeCard(
-        kind: dayKind == "empty" ? "empty" : dayKind,
+        kind: dayKind == "flight" ? "off" : (dayKind == "empty" ? "off" : dayKind),
         headline: snap.headline,
         detail: snap.detail,
         note: snap.noteSnippet,
         liveUpdatedAt: snap.liveUpdatedAt,
+        tomorrow: snap.tomorrow,
         dark: true
       )
     } else if family == .systemSmall {
@@ -537,21 +550,31 @@ struct RouteCardView: View {
   private var title: Color { scheme == .dark ? RouteTheme.titleDark : RouteTheme.titleLight }
   private var muted: Color { scheme == .dark ? RouteTheme.mutedDark : RouteTheme.mutedLight }
   private var track: Color { scheme == .dark ? RouteTheme.trackDark : RouteTheme.trackLight }
-  private var dayKind: String { snap.dayKind ?? (snap.empty ? "empty" : "flight") }
+  private var dayKind: String { snap.dayKind ?? (snap.empty ? "off" : "flight") }
 
   var body: some View {
     Group {
       if snap.statusLabel == "SETUP" {
         EmptyRoute(title: snap.headline, detail: snap.detail, titleColor: title, muted: muted)
       } else if dayKind == "standby" || dayKind == "reserve" || dayKind == "off" || (snap.empty && dayKind != "flight") {
-        DayTypeCard(
-          kind: dayKind == "empty" ? "empty" : dayKind,
-          headline: snap.headline,
-          detail: snap.detail,
-          note: snap.noteSnippet,
-          liveUpdatedAt: snap.liveUpdatedAt,
-          dark: scheme == .dark
-        )
+        if snap.flightNumber != nil, dayKind == "standby" || dayKind == "reserve" {
+          // Next airBaltic departure from SBY base
+          if family == .systemSmall {
+            smallBody
+          } else {
+            mediumBody
+          }
+        } else {
+          DayTypeCard(
+            kind: dayKind == "flight" ? "off" : (dayKind == "empty" ? "off" : dayKind),
+            headline: snap.headline,
+            detail: snap.detail,
+            note: snap.noteSnippet,
+            liveUpdatedAt: snap.liveUpdatedAt,
+            tomorrow: snap.tomorrow,
+            dark: scheme == .dark
+          )
+        }
       } else if family == .systemSmall {
         smallBody
       } else {
@@ -803,6 +826,7 @@ struct DayTypeCard: View {
   let detail: String
   var note: String?
   var liveUpdatedAt: Double?
+  var tomorrow: WidgetTomorrowPreview? = nil
   var dark: Bool
 
   private var accent: Color {
@@ -834,6 +858,9 @@ struct DayTypeCard: View {
         .lineLimit(3)
       Spacer(minLength: 0)
       WidgetMetaFooter(note: note, liveUpdatedAt: liveUpdatedAt, muted: muted, accent: accent)
+      if let tomorrow {
+        TomorrowStrip(tomorrow: tomorrow, title: title, muted: muted, compact: true)
+      }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     .padding(2)
@@ -845,6 +872,51 @@ struct DayTypeCard: View {
     case "reserve": return "RESERVE"
     case "off": return "DAY OFF"
     default: return "TODAY"
+    }
+  }
+}
+
+struct TomorrowStrip: View {
+  let tomorrow: WidgetTomorrowPreview
+  var title: Color
+  var muted: Color
+  var compact: Bool
+
+  private var accent: Color {
+    switch tomorrow.kind {
+    case "standby": return DayTheme.delayedBar
+    case "reserve": return RouteTheme.accent
+    case "off": return DayTheme.startBar
+    default: return DayTheme.flightBar
+    }
+  }
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: compact ? 3 : 5) {
+      Divider().opacity(0.35)
+      HStack(alignment: .firstTextBaseline) {
+        Text(tomorrow.title)
+          .font(.system(size: compact ? 10 : 11, weight: .bold))
+          .foregroundStyle(accent)
+        Spacer(minLength: 4)
+        if let ci = tomorrow.checkInTime, !ci.isEmpty {
+          Text("CI \(ci)")
+            .font(.system(size: compact ? 10 : 11, weight: .semibold))
+            .foregroundStyle(title)
+        }
+      }
+      if let route = tomorrow.route, !route.isEmpty {
+        Text(route)
+          .font(.system(size: compact ? 12 : 15, weight: .bold, design: .rounded))
+          .foregroundStyle(title)
+          .lineLimit(1)
+          .minimumScaleFactor(0.75)
+      }
+      Text(tomorrow.detail)
+        .font(.system(size: compact ? 9 : 11, weight: .medium))
+        .foregroundStyle(muted)
+        .lineLimit(compact ? 1 : 2)
+        .minimumScaleFactor(0.8)
     }
   }
 }
@@ -870,7 +942,7 @@ struct DayTimelineView: View {
   private var snap: WidgetSnapshot { entry.snapshot }
   private var title: Color { scheme == .dark ? DayTheme.titleDark : DayTheme.titleLight }
   private var muted: Color { scheme == .dark ? DayTheme.mutedDark : DayTheme.mutedLight }
-  private var dayKind: String { snap.dayKind ?? (snap.empty ? "empty" : "flight") }
+  private var dayKind: String { snap.dayKind ?? (snap.empty ? "off" : "flight") }
   private var segments: [WidgetDaySegment] {
     if let segs = snap.segments, !segs.isEmpty { return segs }
     return fallbackSegments
@@ -892,15 +964,25 @@ struct DayTimelineView: View {
             .lineLimit(3)
           Spacer(minLength: 0)
         }
-      } else if dayKind == "standby" || dayKind == "reserve" || dayKind == "off" || (snap.empty && dayKind != "flight") {
-        DayTypeCard(
-          kind: dayKind == "empty" ? "empty" : dayKind,
-          headline: snap.headline,
-          detail: snap.detail,
-          note: snap.noteSnippet,
-          liveUpdatedAt: snap.liveUpdatedAt,
-          dark: scheme == .dark
-        )
+      } else if (dayKind == "standby" || dayKind == "reserve" || dayKind == "off" || (snap.empty && dayKind != "flight")) {
+        if (!segments.isEmpty && (dayKind == "standby" || dayKind == "reserve")) {
+          // SBY board: airBaltic departures from base
+          if family == .systemLarge {
+            largeBody
+          } else {
+            mediumBody
+          }
+        } else {
+          DayTypeCard(
+            kind: dayKind == "flight" ? "off" : (dayKind == "empty" ? "off" : dayKind),
+            headline: snap.headline,
+            detail: snap.detail,
+            note: snap.noteSnippet,
+            liveUpdatedAt: snap.liveUpdatedAt,
+            tomorrow: snap.tomorrow,
+            dark: scheme == .dark
+          )
+        }
       } else if family == .systemLarge {
         largeBody
       } else {
@@ -914,16 +996,18 @@ struct DayTimelineView: View {
   private var mediumBody: some View {
     VStack(alignment: .leading, spacing: 8) {
       HStack {
-        Text("Today")
+        Text(dayKind == "standby" || dayKind == "reserve" ? "SBY board" : "Today")
           .font(.caption2.weight(.semibold))
-          .foregroundStyle(DayTheme.flightBar)
+          .foregroundStyle(dayKind == "standby" || dayKind == "reserve" ? DayTheme.delayedBar : DayTheme.flightBar)
         Spacer()
         if let age = WidgetFreshness.liveAgeLabel(snap.liveUpdatedAt) {
           Text(age)
             .font(.caption2)
             .foregroundStyle(muted)
         } else {
-          Text("\(snap.flightCount) sector\(snap.flightCount == 1 ? "" : "s")")
+          Text(dayKind == "standby" || dayKind == "reserve"
+            ? "\(snap.flightCount) BT-op"
+            : "\(snap.flightCount) sector\(snap.flightCount == 1 ? "" : "s")")
             .font(.caption2)
             .foregroundStyle(muted)
         }
@@ -942,6 +1026,10 @@ struct DayTimelineView: View {
         muted: muted,
         accent: DayTheme.flightBar
       )
+
+      if let tomorrow = snap.tomorrow {
+        TomorrowStrip(tomorrow: tomorrow, title: title, muted: muted, compact: true)
+      }
     }
   }
 
@@ -969,8 +1057,6 @@ struct DayTimelineView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
       }
-
-      Spacer(minLength: 4)
 
       VStack(alignment: .leading, spacing: 6) {
         ForEach(Array(flightSegments.enumerated()), id: \.offset) { _, seg in
@@ -1004,6 +1090,12 @@ struct DayTimelineView: View {
         muted: muted,
         accent: DayTheme.flightBar
       )
+
+      Spacer(minLength: 6)
+
+      if let tomorrow = snap.tomorrow {
+        TomorrowStrip(tomorrow: tomorrow, title: title, muted: muted, compact: false)
+      }
     }
   }
 

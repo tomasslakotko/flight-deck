@@ -2,6 +2,7 @@ import type { Duty, LiveFlight } from "@/lib/types";
 import { airportTz, flightRouteLabel } from "@/lib/airports";
 import { formatClock, parseFlightInstant, todayKey } from "@/lib/dates";
 import { checkInInstant, flightsOnDate, isFlightDuty } from "@/lib/shift";
+import { hasNativeBridge, postToNative } from "@/lib/widget-bridge";
 
 const FIRED_KEY = "bt-crew-notified";
 
@@ -36,16 +37,46 @@ function markFired(tag: string) {
 }
 
 export function notificationSupported() {
-  return typeof window !== "undefined" && "Notification" in window;
+  if (typeof window === "undefined") return false;
+  if (hasNativeBridge()) return true;
+  return "Notification" in window;
 }
 
-export function notificationPermission(): NotificationPermission | "unsupported" {
-  if (!notificationSupported()) return "unsupported";
+export function notificationPermission(): NotificationPermission | "unsupported" | "native" {
+  if (typeof window === "undefined") return "unsupported";
+  if (hasNativeBridge()) return "native";
+  if (!("Notification" in window)) return "unsupported";
   return Notification.permission;
 }
 
+export function requestNativeNotificationPermission(): Promise<boolean> {
+  if (!hasNativeBridge()) return Promise.resolve(false);
+  return new Promise((resolve) => {
+    const timer = window.setTimeout(() => {
+      cleanup();
+      resolve(false);
+    }, 15_000);
+    const onEvent = (ev: Event) => {
+      const detail = (ev as CustomEvent<{ action?: string; granted?: boolean }>).detail;
+      if (detail?.action !== "permission") return;
+      cleanup();
+      resolve(Boolean(detail.granted));
+    };
+    const cleanup = () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("flightdeck-native-notif", onEvent);
+    };
+    window.addEventListener("flightdeck-native-notif", onEvent);
+    postToNative({ type: "notifications", action: "request" });
+  });
+}
+
 export async function requestNotificationPermission() {
-  if (!notificationSupported()) return "unsupported" as const;
+  if (hasNativeBridge()) {
+    const ok = await requestNativeNotificationPermission();
+    return ok ? ("granted" as const) : ("denied" as const);
+  }
+  if (!("Notification" in window)) return "unsupported" as const;
   if (Notification.permission === "granted") return "granted" as const;
   if (Notification.permission === "denied") return "denied" as const;
   try {
@@ -55,9 +86,41 @@ export async function requestNotificationPermission() {
   }
 }
 
+/** Schedule check-in / boarding alerts on iOS (works when app is backgrounded). */
+export function syncNativeNotifications(notices: LocalNotice[], enabled: boolean) {
+  if (!hasNativeBridge()) return false;
+  if (!enabled) {
+    postToNative({ type: "notifications", action: "clear" });
+    return true;
+  }
+  return postToNative({
+    type: "notifications",
+    action: "sync",
+    enabled: true,
+    notices: notices.map((n) => ({
+      id: n.tag,
+      tag: n.tag,
+      title: n.title,
+      body: n.body,
+      at: n.at,
+      url: n.url,
+    })),
+  });
+}
+
 export async function showLocalNotification(notice: Omit<LocalNotice, "at">) {
-  if (!notificationSupported() || Notification.permission !== "granted") return false;
   markFired(notice.tag);
+  if (hasNativeBridge()) {
+    return postToNative({
+      type: "notify",
+      id: notice.tag,
+      tag: notice.tag,
+      title: notice.title,
+      body: notice.body,
+      url: notice.url,
+    });
+  }
+  if (!("Notification" in window) || Notification.permission !== "granted") return false;
   const opts: NotificationOptions = {
     body: notice.body,
     tag: notice.tag,
@@ -70,14 +133,13 @@ export async function showLocalNotification(notice: Omit<LocalNotice, "at">) {
       return true;
     }
   } catch {
-    // fall through to page Notification
+    // fall through
   }
   try {
     const n = new Notification(notice.title, opts);
     n.onclick = () => {
       window.focus();
       if (notice.url) window.location.href = notice.url;
-      n.close();
     };
     return true;
   } catch {
